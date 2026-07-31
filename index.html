@@ -3,7 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#4f46e5">
+<meta name="theme-color" content="#0a0b12">
+<meta name="color-scheme" content="dark">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -16,11 +17,17 @@
 </head>
 <body>
 
+<canvas id="festa" class="festa" aria-hidden="true"></canvas>
+
 <p id="avisoArmazenamento" class="aviso oculto"></p>
 
 <header class="topo">
-  <span class="topo-rotulo">Turma</span>
-  <strong id="nomeTurmaTopo">—</strong>
+  <span class="topo-marca" aria-hidden="true"></span>
+  <span class="topo-texto">
+    <small>Turma</small>
+    <strong id="nomeTurmaTopo">—</strong>
+  </span>
+  <span id="chipSequencia" class="chip-seq oculto"></span>
 </header>
 
 <main>
@@ -29,7 +36,7 @@
   <section id="tela-sortear" class="tela ativa">
 
     <div class="progresso">
-      <div class="barra"><i id="barraPreenchida"></i></div>
+      <div id="pips" class="pips" aria-hidden="true"></div>
       <span id="textoProgresso">nenhum aluno cadastrado</span>
     </div>
 
@@ -39,20 +46,28 @@
     </div>
 
     <div id="palco" class="palco">
+      <div class="palco-anel" aria-hidden="true"></div>
       <p id="palcoNome" class="palco-nome">Pronto?</p>
       <p id="palcoDica" class="palco-dica">Toque no botão para sortear</p>
     </div>
 
     <div id="acoesSorteio" class="acoes-sorteio">
-      <button id="btnSortear" class="btn-sortear" type="button">Sortear</button>
+      <button id="btnSortear" class="btn-sortear" type="button">
+        <span class="brilho" aria-hidden="true"></span>Sortear
+      </button>
     </div>
 
     <div id="acoesResultado" class="acoes-resultado oculto">
-      <button class="res certo"    data-res="certo"   type="button"><b>Respondeu certo</b><i data-peso="certo">+1,0</i></button>
-      <button class="res errou"    data-res="errou"   type="button"><b>Respondeu, mas errou</b><i data-peso="errou">+0,7</i></button>
-      <button class="res naosabe"  data-res="naoSabe" type="button"><b>Disse que não sabe</b><i data-peso="naoSabe">+0,4</i></button>
-      <button class="res recusou"  data-res="recusou" type="button"><b>Se recusou a responder</b><i data-peso="recusou">0</i></button>
-      <button class="res faltou" id="btnFaltou" type="button"><b>Faltou</b><i>sorteia outro</i></button>
+      <button class="res certo" data-res="certo" type="button">
+        <span class="res-ico" aria-hidden="true">✓</span><b>Respondeu certo</b><i data-peso="certo">+1,0</i></button>
+      <button class="res errou" data-res="errou" type="button">
+        <span class="res-ico" aria-hidden="true">≈</span><b>Respondeu, mas errou</b><i data-peso="errou">+0,7</i></button>
+      <button class="res naosabe" data-res="naoSabe" type="button">
+        <span class="res-ico" aria-hidden="true">?</span><b>Disse que não sabe</b><i data-peso="naoSabe">+0,4</i></button>
+      <button class="res recusou" data-res="recusou" type="button">
+        <span class="res-ico" aria-hidden="true">✕</span><b>Se recusou a responder</b><i data-peso="recusou">0</i></button>
+      <button class="res faltou" id="btnFaltou" type="button">
+        <span class="res-ico" aria-hidden="true">↻</span><b>Faltou</b><i>sorteia outro</i></button>
     </div>
 
     <div id="desfazer" class="desfazer oculto">
@@ -73,6 +88,7 @@
         <option value="poucos">Caiu menos vezes</option>
       </select>
     </div>
+    <div id="placarTurma" class="placar"></div>
     <div id="listaNotas" class="lista-notas"></div>
     <p class="ajuda">A nota é a média dos pontos do aluno multiplicada por 10. Toque num nome para ver ou corrigir o histórico dele.</p>
   </section>
@@ -86,7 +102,7 @@
       <select id="seletorTurma"></select>
       <div class="linha-botoes">
         <button id="btnNovaTurma" type="button">Nova</button>
-        <button id="btnRenomearTurma" type="button">Renomear</button>
+        <button id="btnRenomearTurma" class="secundario" type="button">Renomear</button>
         <button id="btnApagarTurma" class="perigo" type="button">Apagar</button>
       </div>
     </div>
@@ -114,10 +130,10 @@
     <div class="bloco">
       <label>Quanto vale cada resultado</label>
       <div class="pesos">
-        <div class="peso"><span>Respondeu certo</span><input type="text" id="peso-certo" inputmode="decimal" autocomplete="off"></div>
-        <div class="peso"><span>Respondeu, mas errou</span><input type="text" id="peso-errou" inputmode="decimal" autocomplete="off"></div>
-        <div class="peso"><span>Disse que não sabe</span><input type="text" id="peso-naoSabe" inputmode="decimal" autocomplete="off"></div>
-        <div class="peso"><span>Se recusou a responder</span><input type="text" id="peso-recusou" inputmode="decimal" autocomplete="off"></div>
+        <div class="peso certo"><span>Respondeu certo</span><input type="text" id="peso-certo" inputmode="decimal" autocomplete="off"></div>
+        <div class="peso errou"><span>Respondeu, mas errou</span><input type="text" id="peso-errou" inputmode="decimal" autocomplete="off"></div>
+        <div class="peso naosabe"><span>Disse que não sabe</span><input type="text" id="peso-naoSabe" inputmode="decimal" autocomplete="off"></div>
+        <div class="peso recusou"><span>Se recusou a responder</span><input type="text" id="peso-recusou" inputmode="decimal" autocomplete="off"></div>
       </div>
       <p class="ajuda">Mudar aqui recalcula as notas de tudo que já foi registrado, inclusive das aulas passadas.</p>
     </div>
@@ -130,6 +146,15 @@
       <button id="btnImportar" class="secundario" type="button">Restaurar de um backup</button>
       <input type="file" id="arquivoImportar" accept=".json,application/json" hidden>
       <p class="ajuda">Tudo fica guardado só neste aparelho. Se você limpar os dados do navegador ou desinstalar o app, some. Baixe o backup completo de vez em quando e guarde num lugar seguro.</p>
+    </div>
+
+    <div class="bloco">
+      <label>Efeitos</label>
+      <div class="opcao">
+        <span>Confete e vibração</span>
+        <input type="checkbox" id="ligaEfeitos" class="chave">
+      </div>
+      <p class="ajuda">Desligue se quiser o app mais discreto na hora da aula.</p>
     </div>
 
     <div class="bloco">
@@ -162,8 +187,13 @@
 </dialog>
 
 <dialog id="dlgAluno">
-  <h2 id="dlgAlunoNome">Aluno</h2>
-  <p id="dlgAlunoResumo" class="resumo"></p>
+  <div class="dlg-topo">
+    <span id="dlgAlunoAvatar" class="avatar grande" aria-hidden="true"></span>
+    <span>
+      <h2 id="dlgAlunoNome">Aluno</h2>
+      <p id="dlgAlunoResumo" class="resumo"></p>
+    </span>
+  </div>
   <div id="dlgAlunoHistorico" class="historico"></div>
   <div class="linha-botoes">
     <button id="btnFecharAluno" type="button">Fechar</button>

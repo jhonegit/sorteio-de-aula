@@ -14,6 +14,9 @@ var ROTULOS = {
   recusou: 'Se recusou a responder'
 };
 
+// os mesmos símbolos dos botões, reaproveitados na lista de notas
+var GLIFOS = { certo: '✓', errou: '≈', naoSabe: '?', recusou: '✕' };
+
 var dados = null;
 var sorteado = null;     // id do aluno que está na tela
 var ultimaAcao = null;   // guarda o que dá pra desfazer
@@ -83,6 +86,7 @@ function estruturaVazia() {
     versao: 1,
     turmaAtiva: null,
     pesos: Object.assign({}, PESOS_PADRAO),
+    efeitos: true,
     turmas: [],
     registros: [],
     rodadas: {},
@@ -118,6 +122,7 @@ function carregar() {
   Object.keys(PESOS_PADRAO).forEach(function (k) {
     if (typeof dados.pesos[k] !== 'number' || isNaN(dados.pesos[k])) dados.pesos[k] = PESOS_PADRAO[k];
   });
+  if (typeof dados.efeitos !== 'boolean') dados.efeitos = true;
 
   if (!dados.turmas.length) {
     dados.turmas.push({ id: novoId(), nome: 'Turma 1', alunos: [] });
@@ -197,7 +202,140 @@ function estatisticas(turma) {
   });
 }
 
+// quantos "respondeu certo" seguidos a turma emendou até agora
+function sequencia(turma) {
+  var regs = dados.registros.filter(function (r) { return r.turmaId === turma.id; });
+  var n = 0;
+  for (var i = regs.length - 1; i >= 0; i--) {
+    if (regs[i].resultado === 'certo') n++; else break;
+  }
+  return n;
+}
+
+/* ---------- enfeites ---------- */
+
+function iniciais(nome) {
+  var p = String(nome).trim().split(/\s+/);
+  var a = p[0] ? p[0].charAt(0) : '?';
+  var b = p.length > 1 ? p[p.length - 1].charAt(0) : '';
+  return (a + b).toUpperCase();
+}
+
+// cada aluno ganha sempre a mesma cor, calculada a partir do nome
+function matiz(nome) {
+  var h = 0;
+  for (var i = 0; i < nome.length; i++) h = (h * 31 + nome.charCodeAt(i)) % 360;
+  return h;
+}
+
+function pintarAvatar(el, nome) {
+  var h = matiz(nome);
+  el.style.setProperty('--h', h);
+  el.style.setProperty('--h2', (h + 42) % 360);
+  el.textContent = iniciais(nome);
+}
+
+function vibrar(padrao) {
+  if (!dados.efeitos || !navigator.vibrate) return;
+  try { navigator.vibrate(padrao); } catch (e) {}
+}
+
+var festaAtual = 0;
+
+function festa(cores, quantidade) {
+  if (!dados.efeitos) return;
+  var tela = $('#festa');
+  if (!tela || !tela.getContext || !window.requestAnimationFrame) return;
+  var ctx = tela.getContext('2d');
+  if (!ctx) return;
+
+  var meuTurno = ++festaAtual;
+  var dpr = window.devicePixelRatio || 1;
+  var larg = window.innerWidth, alt = window.innerHeight;
+  tela.width = larg * dpr;
+  tela.height = alt * dpr;
+  tela.style.width = larg + 'px';
+  tela.style.height = alt + 'px';
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+  // sai do meio do palco; se ele estiver escondido, sai do meio da tela
+  var caixa = $('#palco').getBoundingClientRect();
+  var ox = caixa.width ? caixa.left + caixa.width / 2 : larg / 2;
+  var oy = caixa.width ? caixa.top + caixa.height / 2 : alt / 2.4;
+
+  var pecas = [];
+  for (var i = 0; i < quantidade; i++) {
+    var ang = Math.random() * Math.PI * 2;
+    var vel = 3 + Math.random() * 7.5;
+    pecas.push({
+      x: ox, y: oy,
+      vx: Math.cos(ang) * vel,
+      vy: Math.sin(ang) * vel - 3.5,
+      peso: 0.20 + Math.random() * 0.16,
+      larg: 4 + Math.random() * 5,
+      alt: 3 + Math.random() * 4,
+      giro: Math.random() * Math.PI,
+      vgiro: (Math.random() - 0.5) * 0.4,
+      cor: cores[i % cores.length]
+    });
+  }
+
+  var inicio = Date.now();
+
+  // rede de segurança: se a animação travar (app em segundo plano, por exemplo),
+  // isto apaga o confete de qualquer jeito, para não ficar entulho na tela
+  setTimeout(function () {
+    if (meuTurno === festaAtual) ctx.clearRect(0, 0, larg, alt);
+  }, 1400);
+
+  (function quadro() {
+    if (meuTurno !== festaAtual) return;
+    var t = (Date.now() - inicio) / 1150;
+    ctx.clearRect(0, 0, larg, alt);
+    if (t >= 1) return;
+
+    for (var j = 0; j < pecas.length; j++) {
+      var p = pecas[j];
+      p.vx *= 0.986;
+      p.vy += p.peso;
+      p.x += p.vx;
+      p.y += p.vy;
+      p.giro += p.vgiro;
+
+      ctx.save();
+      ctx.globalAlpha = Math.max(0, 1 - t * t);
+      ctx.translate(p.x, p.y);
+      ctx.rotate(p.giro);
+      ctx.fillStyle = p.cor;
+      ctx.fillRect(-p.larg / 2, -p.alt / 2, p.larg, p.alt);
+      ctx.restore();
+    }
+    requestAnimationFrame(quadro);
+  })();
+}
+
+var FLASHES = ['flash-certo', 'flash-errou', 'flash-naoSabe', 'flash-recusou'];
+
+function piscarPalco(resultado) {
+  var palco = $('#palco');
+  FLASHES.forEach(function (c) { palco.classList.remove(c); });
+  palco.classList.add('flash-' + resultado);
+  setTimeout(function () { palco.classList.remove('flash-' + resultado); }, 950);
+}
+
 /* ---------- navegação ---------- */
+
+function renderTopo(t) {
+  document.getElementById('nomeTurmaTopo').textContent = t.nome;
+  var seq = sequencia(t);
+  var chip = $('#chipSequencia');
+  if (seq >= 2) {
+    chip.classList.remove('oculto');
+    chip.textContent = '🔥 ' + seq + ' seguidos';
+  } else {
+    chip.classList.add('oculto');
+  }
+}
 
 function irPara(nome) {
   $$('.tela').forEach(function (t) { t.classList.toggle('ativa', t.id === 'tela-' + nome); });
@@ -222,15 +360,29 @@ function repouso(mensagem, dica) {
   $('#btnSortear').disabled = false;
 }
 
+// uma bolinha por aluno: acesa quem já caiu, contornada quem faltou hoje
+function renderPips(t) {
+  var caixa = $('#pips');
+  caixa.textContent = '';
+  var feitos = rodada(t.id);
+  var faltaram = ausentes(t.id);
+  t.alunos.forEach(function (a) {
+    var p = document.createElement('i');
+    if (faltaram.indexOf(a.id) !== -1) p.className = 'faltou';
+    else if (feitos.indexOf(a.id) !== -1) p.className = 'feito';
+    caixa.appendChild(p);
+  });
+}
+
 function renderSortear() {
   var t = turmaAtual();
-  $('#nomeTurmaTopo').textContent = t.nome;
+  renderTopo(t);
 
   var total = t.alunos.length;
   var jaForam = rodada(t.id).filter(function (id) { return alunoPorId(t, id); }).length;
   var faltaram = ausentes(t.id).filter(function (id) { return alunoPorId(t, id); });
 
-  $('#barraPreenchida').style.width = total ? (jaForam / total * 100) + '%' : '0%';
+  renderPips(t);
   $('#textoProgresso').textContent = total
     ? jaForam + ' de ' + total + ' já caíram nesta rodada'
     : 'nenhum aluno cadastrado nesta turma';
@@ -305,6 +457,10 @@ function animar(pool, escolhido, rodadaNova) {
     var p = (Date.now() - inicio) / duracao;
     if (p >= 1) { revelar(escolhido, rodadaNova); return; }
     nome.textContent = nomes[aleatorio(nomes.length)];
+    // reinicia a animação a cada troca, para o nome parecer cair de cima
+    nome.classList.remove('passa');
+    void nome.offsetWidth;
+    nome.classList.add('passa');
     setTimeout(passo, 40 + 140 * p * p);   // vai desacelerando
   })();
 }
@@ -314,9 +470,12 @@ function revelar(aluno, rodadaNova) {
   sorteado = aluno.id;
 
   var palco = $('#palco');
+  var nome = $('#palcoNome');
   palco.classList.remove('girando');
+  FLASHES.forEach(function (c) { palco.classList.remove(c); });
+  nome.classList.remove('passa');
   palco.classList.add('revelado');
-  $('#palcoNome').textContent = aluno.nome;
+  nome.textContent = aluno.nome;
   $('#palcoDica').textContent = rodadaNova
     ? 'rodada nova · todo mundo voltou pro sorteio'
     : 'o que aconteceu?';
@@ -324,7 +483,7 @@ function revelar(aluno, rodadaNova) {
   $('#acoesSorteio').classList.add('oculto');
   $('#acoesResultado').classList.remove('oculto');
 
-  if (navigator.vibrate) { try { navigator.vibrate(30); } catch (e) {} }
+  vibrar(28);
   if (rodadaNova) salvar();
   renderSortear();
 }
@@ -360,7 +519,24 @@ function registrar(resultado) {
   $('#acoesSorteio').classList.remove('oculto');
   $('#btnSortear').disabled = false;
 
+  comemorar(resultado, sequencia(t));
   renderSortear();
+}
+
+// a parte bonita: pisca a moldura na cor do resultado e joga confete no acerto
+function comemorar(resultado, seq) {
+  piscarPalco(resultado);
+
+  if (resultado === 'certo') {
+    festa(['#34d399', '#7c5cff', '#22d3ee', '#fbbf24', '#ffffff'],
+          Math.min(45 + seq * 14, 120));
+    vibrar([18, 45, 18]);
+  } else if (resultado === 'errou') {
+    festa(['#fbbf24', '#f59e0b', '#ffffff'], 24);
+    vibrar(30);
+  } else {
+    vibrar(14);
+  }
 }
 
 function marcarFalta() {
@@ -416,17 +592,25 @@ function desfazer() {
 
 function renderNotas() {
   var t = turmaAtual();
-  $('#nomeTurmaTopo').textContent = t.nome;
+  renderTopo(t);
 
   var caixa = $('#listaNotas');
   caixa.textContent = '';
 
   var linhas = estatisticas(t);
+  renderPlacar(t, linhas);
 
   if (!linhas.length) {
     caixa.appendChild(cria('p', 'vazio', 'Nenhum aluno cadastrado nesta turma.'));
     return;
   }
+
+  // as três maiores notas ganham medalha, seja qual for a ordem escolhida
+  var premiados = linhas.filter(function (l) { return l.nota !== null; })
+    .sort(function (a, b) { return b.nota - a.nota; })
+    .slice(0, 3)
+    .map(function (l) { return l.aluno.id; });
+  var MEDALHAS = ['🥇', '🥈', '🥉'];
 
   linhas.sort(function (a, b) {
     if (ordemNotas === 'nome') return a.aluno.nome.localeCompare(b.aluno.nome, 'pt-BR');
@@ -440,12 +624,70 @@ function renderNotas() {
   linhas.forEach(function (l) {
     var b = cria('button', 'linha-nota');
     b.type = 'button';
-    b.appendChild(cria('span', 'nome', l.aluno.nome));
-    b.appendChild(cria('span', 'vezes', l.vezes === 1 ? '1 vez' : l.vezes + ' vezes'));
-    b.appendChild(cria('span', l.nota === null ? 'nota vazia' : 'nota',
-                       l.nota === null ? '—' : num(l.nota)));
+
+    var moldura = cria('div', 'av-wrap');
+    var av = cria('span', 'avatar');
+    pintarAvatar(av, l.aluno.nome);
+    moldura.appendChild(av);
+
+    var lugar = premiados.indexOf(l.aluno.id);
+    if (lugar !== -1) moldura.appendChild(cria('span', 'medalha', MEDALHAS[lugar]));
+    b.appendChild(moldura);
+
+    var info = cria('div', 'info');
+    info.appendChild(cria('span', 'nome', l.aluno.nome));
+
+    var contagem = { certo: 0, errou: 0, naoSabe: 0, recusou: 0 };
+    l.registros.forEach(function (r) { if (contagem[r.resultado] !== undefined) contagem[r.resultado]++; });
+
+    var pills = cria('div', 'pills');
+    Object.keys(contagem).forEach(function (k) {
+      if (!contagem[k]) return;
+      var pi = cria('i', k, GLIFOS[k] + ' ' + contagem[k]);
+      pi.title = ROTULOS[k];
+      pills.appendChild(pi);
+    });
+    info.appendChild(pills);
+    b.appendChild(info);
+
+    var lado = cria('div', 'nota-caixa');
+    lado.appendChild(cria('span', 'nota ' + faixaNota(l.nota), l.nota === null ? '—' : num(l.nota)));
+    lado.appendChild(cria('span', 'vezes', l.vezes === 1 ? '1 vez' : l.vezes + ' vezes'));
+    b.appendChild(lado);
+
+    var xp = cria('div', 'xp');
+    xp.style.width = (l.nota === null ? 0 : l.nota * 10) + '%';
+    b.appendChild(xp);
+
     b.addEventListener('click', function () { abrirAluno(l.aluno.id); });
     caixa.appendChild(b);
+  });
+}
+
+function faixaNota(nota) {
+  if (nota === null) return 'vazia';
+  if (nota >= 8) return 'alta';
+  if (nota >= 5) return 'media';
+  return 'baixa';
+}
+
+function renderPlacar(t, linhas) {
+  var caixa = $('#placarTurma');
+  caixa.textContent = '';
+
+  var comNota = linhas.filter(function (l) { return l.nota !== null; });
+  var sorteios = linhas.reduce(function (s, l) { return s + l.vezes; }, 0);
+  var media = comNota.length
+    ? comNota.reduce(function (s, l) { return s + l.nota; }, 0) / comNota.length
+    : null;
+
+  [[String(sorteios), 'sorteios'],
+   [media === null ? '—' : num(media), 'média'],
+   [String(t.alunos.length), 'alunos']].forEach(function (par) {
+    var d = document.createElement('div');
+    d.appendChild(cria('b', null, par[0]));
+    d.appendChild(cria('span', null, par[1]));
+    caixa.appendChild(d);
   });
 }
 
@@ -457,6 +699,7 @@ function abrirAluno(alunoId) {
   var stat = estatisticas(t).filter(function (s) { return s.aluno.id === alunoId; })[0];
 
   $('#dlgAlunoNome').textContent = aluno.nome;
+  pintarAvatar($('#dlgAlunoAvatar'), aluno.nome);
 
   var contagem = { certo: 0, errou: 0, naoSabe: 0, recusou: 0 };
   stat.registros.forEach(function (r) { if (contagem[r.resultado] !== undefined) contagem[r.resultado]++; });
@@ -519,7 +762,7 @@ function abrirAluno(alunoId) {
 
 function renderTurma() {
   var t = turmaAtual();
-  $('#nomeTurmaTopo').textContent = t.nome;
+  renderTopo(t);
 
   var sel = $('#seletorTurma');
   sel.textContent = '';
@@ -595,10 +838,11 @@ function adicionarAlunos(nomes) {
 /* ---------- tela de ajustes ---------- */
 
 function renderAjustes() {
-  $('#nomeTurmaTopo').textContent = turmaAtual().nome;
+  renderTopo(turmaAtual());
   Object.keys(PESOS_PADRAO).forEach(function (k) {
-    $('#peso-' + k).value = String(dados.pesos[k]).replace('.', ',');
+    $('#peso-' + k).value = num(dados.pesos[k]);
   });
+  $('#ligaEfeitos').checked = dados.efeitos;
 }
 
 /* ---------- baixar arquivos ---------- */
@@ -709,6 +953,7 @@ function carregarConserto() {
   Object.keys(PESOS_PADRAO).forEach(function (k) {
     if (typeof dados.pesos[k] !== 'number' || isNaN(dados.pesos[k])) dados.pesos[k] = PESOS_PADRAO[k];
   });
+  if (typeof dados.efeitos !== 'boolean') dados.efeitos = true;
   if (!dados.turmas.length) dados.turmas.push({ id: novoId(), nome: 'Turma 1', alunos: [] });
   if (!turmaAtual()) dados.turmaAtiva = dados.turmas[0].id;
   ultimaAcao = null;
@@ -852,10 +1097,16 @@ function ligarEventos() {
       var v = parseFloat(String(e.target.value).trim().replace(',', '.'));
       if (isNaN(v) || v < 0) v = dados.pesos[k];
       if (v > 10) v = 10;
-      dados.pesos[k] = Math.round(v * 100) / 100;
-      e.target.value = String(dados.pesos[k]).replace('.', ',');
+      dados.pesos[k] = Math.round(v * 10) / 10;   // décimos, igual ao que aparece na tela
+      e.target.value = num(dados.pesos[k]);
       salvar();
     });
+  });
+
+  $('#ligaEfeitos').addEventListener('change', function (e) {
+    dados.efeitos = !!e.target.checked;
+    salvar();
+    if (dados.efeitos) festa(['#7c5cff', '#22d3ee', '#34d399', '#ffffff'], 30);
   });
 
   $('#btnExportarJson').addEventListener('click', exportarBackup);

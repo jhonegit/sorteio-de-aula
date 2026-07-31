@@ -14,6 +14,8 @@ Funciona no celular, instalado como aplicativo, e abre sem internet.
 - A nota de cada aluno é a média dos pontos dele multiplicada por 10, então
   quem caiu mais vezes não é prejudicado nem beneficiado.
 - Quanto vale cada resultado é ajustável dentro do app, em Ajustes.
+- Confete no acerto, vibração e sequência de acertos da turma. Dá para desligar
+  tudo isso em Ajustes se o dia pedir algo mais discreto.
 
 ## Onde ficam os dados
 
