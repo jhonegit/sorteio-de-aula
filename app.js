@@ -79,6 +79,113 @@ function normalizar(s) {
   return saida;
 }
 
+/* ---------- busca por som ---------- */
+
+// reescreve o nome do jeito que ele soa, para "cami" encontrar "Kamila":
+// c e k viram a mesma letra, y vira i, w vira v, h some, letra dobrada vira uma só.
+function fonetica(s) {
+  var t = normalizar(String(s).replace(/ç/gi, 's'));
+  t = t.replace(/[^a-z0-9 ]+/g, ' ');
+  t = t.replace(/ph/g, 'f');
+  t = t.replace(/[cs]h/g, 'x');        // Chris, Sheila
+  t = t.replace(/lh/g, 'l');
+  t = t.replace(/nh/g, 'n');
+  t = t.replace(/qu/g, 'k');           // Quiteria
+  // o G marcado em maiúscula é o de som duro (Guilherme, Miguel), para a
+  // linha seguinte não trocá-lo por J; depois ele volta a ser g minúsculo
+  t = t.replace(/gu([ei])/g, 'G$1');
+  t = t.replace(/g([ei])/g, 'j$1');    // Gerson / Jerson
+  t = t.replace(/G/g, 'g');
+  t = t.replace(/c([ei])/g, 's$1');    // Cecilia
+  t = t.replace(/[cq]/g, 'k');         // Camila / Kamila
+  t = t.replace(/z/g, 's');            // Luiz / Luis
+  t = t.replace(/y/g, 'i');            // Tayná / Tainá
+  t = t.replace(/w/g, 'v');            // Wanderson / Vanderson
+  t = t.replace(/h/g, '');             // Thiago / Tiago
+  t = t.replace(/(.)\1+/g, '$1');      // Jessica / Jéssyka
+  return t.replace(/\s+/g, ' ').trim();
+}
+
+// quantas correções faltam para o que foi digitado virar o começo da palavra.
+// serve para perdoar letra trocada ou faltando ("kmila" ainda acha "Kamila").
+function distanciaInicio(busca, palavra) {
+  var m = busca.length, n = palavra.length, i, j;
+  if (!m) return 0;
+
+  var anterior = [], atual = [];
+  for (j = 0; j <= n; j++) anterior[j] = j;
+
+  for (i = 1; i <= m; i++) {
+    atual[0] = i;
+    for (j = 1; j <= n; j++) {
+      var custo = busca.charAt(i - 1) === palavra.charAt(j - 1) ? 0 : 1;
+      atual[j] = Math.min(anterior[j] + 1, atual[j - 1] + 1, anterior[j - 1] + custo);
+    }
+    for (j = 0; j <= n; j++) anterior[j] = atual[j];
+  }
+
+  var menor = anterior[0];
+  for (j = 1; j <= n; j++) if (anterior[j] < menor) menor = anterior[j];
+  return menor;
+}
+
+// nota de 0 a 100 de um pedaço digitado contra um nome; -1 quando não combina
+function pontuarPedaco(pedaco, palavras, inteiro) {
+  var melhor = -1;
+
+  for (var i = 0; i < palavras.length; i++) {
+    var p = palavras[i];
+    var pos = p.indexOf(pedaco);
+    var pontos = -1;
+
+    if (pos === 0) pontos = 100;                 // começa igual
+    else if (pos > 0) pontos = 70;               // aparece no meio da palavra
+    else {
+      // sobra de erro: nomes curtos perdoam menos, senão tudo vira resultado
+      var folga = pedaco.length <= 3 ? 0 : pedaco.length <= 6 ? 1 : 2;
+      var d = distanciaInicio(pedaco, p);
+      if (d <= folga) pontos = 86 - d * 18;
+    }
+
+    if (pontos >= 0) pontos -= i * 3;            // o primeiro nome pesa mais
+    if (pontos > melhor) melhor = pontos;
+  }
+
+  // última tentativa: nome inteiro sem espaços, para quem digita "anasilva"
+  if (melhor < 0 && inteiro.indexOf(pedaco) !== -1) melhor = 45;
+  return melhor;
+}
+
+function pontuarNome(nome, pedacos) {
+  var f = fonetica(nome);
+  var palavras = f.split(' ');
+  var inteiro = f.replace(/ /g, '');
+  var total = 0;
+
+  for (var i = 0; i < pedacos.length; i++) {
+    var p = pontuarPedaco(pedacos[i], palavras, inteiro);
+    if (p < 0) return -1;                        // todo pedaço digitado tem de bater
+    total += p;
+  }
+  // empate: nome mais curto primeiro, porque costuma ser o que se procurava
+  return total * 1000 - f.length;
+}
+
+function buscarAlunos(turma, texto) {
+  var pedacos = fonetica(texto).split(' ').filter(function (p) { return p; });
+
+  var lista = turma.alunos.slice().sort(function (a, b) {
+    return a.nome.localeCompare(b.nome, 'pt-BR');
+  });
+  if (!pedacos.length) return lista;
+
+  return lista
+    .map(function (a) { return { aluno: a, pontos: pontuarNome(a.nome, pedacos) }; })
+    .filter(function (x) { return x.pontos >= 0; })
+    .sort(function (a, b) { return b.pontos - a.pontos; })
+    .map(function (x) { return x.aluno; });
+}
+
 /* ---------- guardar e ler ---------- */
 
 function estruturaVazia() {
@@ -357,6 +464,7 @@ function repouso(mensagem, dica) {
   $('#palcoDica').textContent = dica;
   $('#acoesResultado').classList.add('oculto');
   $('#acoesSorteio').classList.remove('oculto');
+  $('#btnFaltou').classList.remove('oculto');
   $('#btnSortear').disabled = false;
 }
 
@@ -482,10 +590,104 @@ function revelar(aluno, rodadaNova) {
 
   $('#acoesSorteio').classList.add('oculto');
   $('#acoesResultado').classList.remove('oculto');
+  $('#btnFaltou').classList.remove('oculto');
 
   vibrar(28);
   if (rodadaNova) salvar();
   renderSortear();
+}
+
+/* ---------- chamar quem se ofereceu ---------- */
+
+// coloca o aluno no palco sem sortear. daí em diante é igual ao sorteio:
+// ao registrar o resultado ele entra na lista de quem já caiu nesta rodada,
+// e só volta a ser sorteável quando a rodada virar.
+function chamarVoluntario(alunoId) {
+  if (girando) return;
+  var t = turmaAtual();
+  var aluno = alunoPorId(t, alunoId);
+  if (!aluno) return;
+
+  fecharJanela($('#dlgVoluntario'));
+
+  sorteado = aluno.id;
+  var palco = $('#palco');
+  var nome = $('#palcoNome');
+  palco.classList.remove('girando');
+  FLASHES.forEach(function (c) { palco.classList.remove(c); });
+  nome.classList.remove('passa');
+  palco.classList.add('revelado');
+  nome.textContent = aluno.nome;
+  $('#palcoDica').textContent = 'se ofereceu · o que aconteceu?';
+
+  $('#acoesSorteio').classList.add('oculto');
+  $('#acoesResultado').classList.remove('oculto');
+  $('#btnFaltou').classList.add('oculto');   // quem se ofereceu está na aula
+
+  vibrar(18);
+  renderSortear();
+}
+
+function abrirVoluntario() {
+  var t = turmaAtual();
+  if (!t.alunos.length) {
+    irPara('turma');
+    $('#inputAluno').focus();
+    return;
+  }
+  $('#buscaVoluntario').value = '';
+  renderBusca();
+  abrirJanela($('#dlgVoluntario'));
+  $('#buscaVoluntario').focus();
+}
+
+function renderBusca() {
+  var t = turmaAtual();
+  var caixa = $('#listaVoluntario');
+  caixa.textContent = '';
+
+  var achados = buscarAlunos(t, $('#buscaVoluntario').value);
+
+  if (!achados.length) {
+    caixa.appendChild(cria('p', 'vazio', 'Nenhum nome parecido com isso.'));
+    return;
+  }
+
+  var feitos = rodada(t.id);
+  var faltaram = ausentes(t.id);
+  var vezes = {};
+  dados.registros.forEach(function (r) {
+    if (r.turmaId === t.id) vezes[r.alunoId] = (vezes[r.alunoId] || 0) + 1;
+  });
+
+  achados.slice(0, 40).forEach(function (a, i) {
+    var b = cria('button', 'linha-busca' + (i === 0 ? ' primeiro' : ''));
+    b.type = 'button';
+
+    var av = cria('span', 'avatar');
+    pintarAvatar(av, a.nome);
+    b.appendChild(av);
+
+    var info = cria('div', 'info');
+    info.appendChild(cria('span', 'nome', a.nome));
+
+    var n = vezes[a.id] || 0;
+    var recado = n === 0 ? 'ainda não participou' : n === 1 ? '1 participação' : n + ' participações';
+    var marca = cria('span', 'marca', recado);
+
+    if (faltaram.indexOf(a.id) !== -1) {
+      marca.textContent = recado + ' · marcado como falta hoje';
+      marca.classList.add('destaque');
+    } else if (feitos.indexOf(a.id) !== -1) {
+      marca.textContent = recado + ' · já caiu nesta rodada';
+      marca.classList.add('destaque');
+    }
+    info.appendChild(marca);
+    b.appendChild(info);
+
+    b.addEventListener('click', function () { chamarVoluntario(a.id); });
+    caixa.appendChild(b);
+  });
 }
 
 function registrar(resultado) {
@@ -503,11 +705,14 @@ function registrar(resultado) {
   };
   dados.registros.push(reg);
 
-  if (rodada(t.id).indexOf(aluno.id) === -1) rodada(t.id).push(aluno.id);
+  // quem se ofereceu pode já ter caído nesta rodada; guardo isso para o desfazer
+  var jaNaRodada = rodada(t.id).indexOf(aluno.id) !== -1;
+  if (!jaNaRodada) rodada(t.id).push(aluno.id);
 
   ultimaAcao = {
     tipo: 'registro', registroId: reg.id, turmaId: t.id,
-    alunoId: aluno.id, nome: aluno.nome, resultado: resultado
+    alunoId: aluno.id, nome: aluno.nome, resultado: resultado,
+    jaNaRodada: jaNaRodada
   };
   salvar();
 
@@ -571,11 +776,13 @@ function desfazer() {
 
   if (a.tipo === 'registro') {
     dados.registros = dados.registros.filter(function (r) { return r.id !== a.registroId; });
-    // volta o aluno pro sorteio: como ele não podia ter caído duas vezes
-    // na mesma rodada, tirá-lo da lista de "já caíram" é sempre correto
-    var r = rodada(a.turmaId);
-    var pos = r.indexOf(a.alunoId);
-    if (pos !== -1) r.splice(pos, 1);
+    // volta o aluno pro sorteio, a não ser que ele já estivesse na lista de
+    // "já caíram" antes deste registro (caso de quem se ofereceu duas vezes)
+    if (!a.jaNaRodada) {
+      var r = rodada(a.turmaId);
+      var pos = r.indexOf(a.alunoId);
+      if (pos !== -1) r.splice(pos, 1);
+    }
   } else if (a.tipo === 'falta') {
     var lista = ausentes(a.turmaId);
     var i = lista.indexOf(a.alunoId);
@@ -988,6 +1195,18 @@ function ligarEventos() {
 
   $('#btnFaltou').addEventListener('click', marcarFalta);
   $('#btnDesfazer').addEventListener('click', desfazer);
+
+  $('#btnVoluntario').addEventListener('click', abrirVoluntario);
+  $('#btnVoluntarioCancelar').addEventListener('click', function () { fecharJanela($('#dlgVoluntario')); });
+  $('#buscaVoluntario').addEventListener('input', renderBusca);
+
+  // Enter escolhe o primeiro da lista, sem precisar tirar a mão do teclado
+  $('#buscaVoluntario').addEventListener('keydown', function (e) {
+    if (e.key !== 'Enter') return;
+    e.preventDefault();
+    var primeiro = $('#listaVoluntario .linha-busca');
+    if (primeiro) primeiro.click();
+  });
 
   $('#btnLimparAusentes').addEventListener('click', function () {
     var t = turmaAtual();

@@ -55,6 +55,9 @@
       <button id="btnSortear" class="btn-sortear" type="button">
         <span class="brilho" aria-hidden="true"></span>Sortear
       </button>
+      <button id="btnVoluntario" class="btn-voluntario secundario" type="button">
+        <span aria-hidden="true">✋</span>Chamar quem se ofereceu
+      </button>
     </div>
 
     <div id="acoesResultado" class="acoes-resultado oculto">
@@ -183,6 +186,17 @@
   <div class="linha-botoes">
     <button id="btnColarCancelar" class="secundario" type="button">Cancelar</button>
     <button id="btnColarConfirmar" type="button">Adicionar</button>
+  </div>
+</dialog>
+
+<dialog id="dlgVoluntario">
+  <h2>Quem quer responder?</h2>
+  <p class="ajuda">Não precisa acertar a escrita: digite "cami" e a "Kamila" aparece.</p>
+  <input id="buscaVoluntario" class="campo-busca" type="text" placeholder="Buscar pelo nome"
+         autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false">
+  <div id="listaVoluntario" class="lista-busca"></div>
+  <div class="linha-botoes">
+    <button id="btnVoluntarioCancelar" class="secundario" type="button">Cancelar</button>
   </div>
 </dialog>
 

@@ -9,6 +9,11 @@ Funciona no celular, instalado como aplicativo, e abre sem internet.
 
 - O sorteio não repete: um aluno só volta a ser sorteado depois que a turma
   inteira passou. Quando todos passam, a rodada recomeça sozinha.
+- Dá para chamar alguém fora do sorteio, para quem se oferece. A busca acha o
+  nome pelo som: "cami" encontra "Kamila". Quem é chamado assim conta como se
+  tivesse caído no sorteio e só volta a ser sorteável na rodada seguinte.
+- Cada turma tem a própria rodada. Trocar de turma no meio do dia não atrapalha:
+  cada uma continua de onde parou.
 - Quem faltou sai do sorteio daquele dia e não gasta a vez dele na rodada.
   No dia seguinte volta sozinho.
 - A nota de cada aluno é a média dos pontos dele multiplicada por 10, então
