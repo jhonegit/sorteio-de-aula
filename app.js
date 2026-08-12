@@ -23,6 +23,8 @@ var ultimaAcao = null;   // guarda o que dá pra desfazer
 var girando = false;
 var ordemNotas = 'nome';
 var armazenamentoOk = true;
+var segurando = null;    // botão de resultado que está sendo segurado agora
+var travado = false;     // segura o app durante o estouro do dobro
 
 /* ---------- atalhos ---------- */
 
@@ -291,19 +293,31 @@ function disponiveis(turma) {
   });
 }
 
+// pergunta desafiadora conta 2; registro antigo, sem o campo, conta 1
+function multiploDe(registro) {
+  return registro.mult === 2 ? 2 : 1;
+}
+
 function estatisticas(turma) {
   var regs = dados.registros.filter(function (r) { return r.turmaId === turma.id; });
   return turma.alunos.map(function (a) {
     var meus = regs.filter(function (r) { return r.alunoId === a.id; });
-    var soma = meus.reduce(function (s, r) {
+    var soma = 0, divisor = 0, dobros = 0;
+
+    meus.forEach(function (r) {
+      var m = multiploDe(r);
       var p = dados.pesos[r.resultado];
-      return s + (typeof p === 'number' ? p : 0);
-    }, 0);
+      soma += (typeof p === 'number' ? p : 0) * m;
+      divisor += m;                       // a pergunta em dobro pesa por duas
+      if (m > 1) dobros++;
+    });
+
     return {
       aluno: a,
       vezes: meus.length,
+      dobros: dobros,
       soma: soma,
-      nota: meus.length ? (soma / meus.length) * 10 : null,
+      nota: divisor ? (soma / divisor) * 10 : null,
       registros: meus
     };
   });
@@ -347,34 +361,116 @@ function vibrar(padrao) {
   try { navigator.vibrate(padrao); } catch (e) {}
 }
 
-var festaAtual = 0;
+/* Um único desenho no ar para tudo: confete e fumaça dourada dividem a mesma
+   tela e o mesmo laço, senão um apagaria o outro no meio do caminho. */
 
-function festa(cores, quantidade) {
-  if (!dados.efeitos) return;
+var pecas = [];
+var lacoLigado = false;
+var ctxFesta = null, largFesta = 0, altFesta = 0;
+
+function prepararTela() {
   var tela = $('#festa');
-  if (!tela || !tela.getContext || !window.requestAnimationFrame) return;
+  if (!tela || !tela.getContext || !window.requestAnimationFrame) return null;
   var ctx = tela.getContext('2d');
-  if (!ctx) return;
+  if (!ctx) return null;
 
-  var meuTurno = ++festaAtual;
   var dpr = window.devicePixelRatio || 1;
-  var larg = window.innerWidth, alt = window.innerHeight;
-  tela.width = larg * dpr;
-  tela.height = alt * dpr;
-  tela.style.width = larg + 'px';
-  tela.style.height = alt + 'px';
+  largFesta = window.innerWidth;
+  altFesta = window.innerHeight;
+
+  var lp = Math.round(largFesta * dpr), ap = Math.round(altFesta * dpr);
+  if (tela.width !== lp || tela.height !== ap) {
+    tela.width = lp;
+    tela.height = ap;
+    tela.style.width = largFesta + 'px';
+    tela.style.height = altFesta + 'px';
+  }
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctxFesta = ctx;
+  return ctx;
+}
 
-  // sai do meio do palco; se ele estiver escondido, sai do meio da tela
-  var caixa = $('#palco').getBoundingClientRect();
-  var ox = caixa.width ? caixa.left + caixa.width / 2 : larg / 2;
-  var oy = caixa.width ? caixa.top + caixa.height / 2 : alt / 2.4;
+function ligarLaco() {
+  if (lacoLigado) return;
+  lacoLigado = true;
+  requestAnimationFrame(quadro);
+}
 
-  var pecas = [];
+function quadro() {
+  var ctx = ctxFesta;
+  if (!ctx) { lacoLigado = false; pecas = []; return; }
+
+  ctx.clearRect(0, 0, largFesta, altFesta);
+
+  var agora = Date.now();
+  var vivas = [];
+
+  for (var i = 0; i < pecas.length; i++) {
+    var p = pecas[i];
+    var t = (agora - p.inicio) / p.vida;
+    if (t >= 1) continue;                     // acabou o tempo dela
+    if (p.tipo === 'fumaca') pintarFumaca(ctx, p, t);
+    else pintarConfete(ctx, p, t);
+    vivas.push(p);
+  }
+
+  pecas = vivas;
+
+  if (pecas.length) requestAnimationFrame(quadro);
+  else { lacoLigado = false; ctx.clearRect(0, 0, largFesta, altFesta); }
+}
+
+function pintarConfete(ctx, p, t) {
+  p.vx *= 0.986;
+  p.vy += p.peso;
+  p.x += p.vx;
+  p.y += p.vy;
+  p.giro += p.vgiro;
+
+  ctx.save();
+  ctx.globalAlpha = Math.max(0, 1 - t * t);
+  ctx.translate(p.x, p.y);
+  ctx.rotate(p.giro);
+  ctx.fillStyle = p.cor;
+  ctx.fillRect(-p.larg / 2, -p.alt / 2, p.larg, p.alt);
+  ctx.restore();
+}
+
+// baforada dourada: sobe, abre e some, com brilho somado para parecer luz
+function pintarFumaca(ctx, p, t) {
+  p.vy += p.empuxo;
+  p.vx *= 0.98;
+  p.x += p.vx;
+  p.y += p.vy;
+  p.raio += p.abre;
+
+  var a = p.forca * Math.min(1, t * 5) * (1 - t) * (1 - t);
+  if (a <= 0.002) return;
+
+  var g = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, p.raio);
+  g.addColorStop(0, 'rgba(253, 230, 138, ' + a.toFixed(3) + ')');
+  g.addColorStop(0.45, 'rgba(251, 191, 36, ' + (a * 0.45).toFixed(3) + ')');
+  g.addColorStop(1, 'rgba(251, 191, 36, 0)');
+
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  ctx.fillStyle = g;
+  ctx.beginPath();
+  ctx.arc(p.x, p.y, p.raio, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+}
+
+function festaDe(ox, oy, cores, quantidade) {
+  if (!dados.efeitos || !prepararTela()) return;
+  var agora = Date.now();
+
   for (var i = 0; i < quantidade; i++) {
     var ang = Math.random() * Math.PI * 2;
     var vel = 3 + Math.random() * 7.5;
     pecas.push({
+      tipo: 'confete',
+      inicio: agora, vida: 1150,
       x: ox, y: oy,
       vx: Math.cos(ang) * vel,
       vy: Math.sin(ang) * vel - 3.5,
@@ -386,39 +482,69 @@ function festa(cores, quantidade) {
       cor: cores[i % cores.length]
     });
   }
+  ligarLaco();
+}
 
-  var inicio = Date.now();
+function festa(cores, quantidade) {
+  if (!dados.efeitos || !prepararTela()) return;
+  // sai do meio do palco; se ele estiver escondido, sai do meio da tela
+  var caixa = $('#palco').getBoundingClientRect();
+  festaDe(caixa.width ? caixa.left + caixa.width / 2 : largFesta / 2,
+          caixa.width ? caixa.top + caixa.height / 2 : altFesta / 2.4,
+          cores, quantidade);
+}
 
-  // rede de segurança: se a animação travar (app em segundo plano, por exemplo),
-  // isto apaga o confete de qualquer jeito, para não ficar entulho na tela
-  setTimeout(function () {
-    if (meuTurno === festaAtual) ctx.clearRect(0, 0, larg, alt);
-  }, 1400);
+// a fumaça dourada que sobe de dentro do botão segurado
+function fumacaDourada(caixa) {
+  if (!dados.efeitos || !prepararTela()) return;
+  var agora = Date.now();
 
-  (function quadro() {
-    if (meuTurno !== festaAtual) return;
-    var t = (Date.now() - inicio) / 1150;
-    ctx.clearRect(0, 0, larg, alt);
-    if (t >= 1) return;
+  for (var i = 0; i < 26; i++) {
+    var lado = Math.random();
+    pecas.push({
+      tipo: 'fumaca',
+      inicio: agora + Math.random() * 130,
+      vida: 900 + Math.random() * 620,
+      x: caixa.left + lado * caixa.width,
+      y: caixa.top + caixa.height * (0.35 + Math.random() * 0.5),
+      vx: (lado - 0.5) * 2.6 + (Math.random() - 0.5) * 1.2,
+      vy: -1.4 - Math.random() * 2.2,
+      empuxo: -0.045,                       // vai ficando mais rápido pra cima
+      raio: 10 + Math.random() * 20,
+      abre: 0.85 + Math.random() * 0.9,
+      forca: 0.30 + Math.random() * 0.3
+    });
+  }
 
-    for (var j = 0; j < pecas.length; j++) {
-      var p = pecas[j];
-      p.vx *= 0.986;
-      p.vy += p.peso;
-      p.x += p.vx;
-      p.y += p.vy;
-      p.giro += p.vgiro;
+  // faíscas douradas junto, para a fumaça não ficar só um borrão
+  for (var j = 0; j < 16; j++) {
+    var ang = -Math.PI / 2 + (Math.random() - 0.5) * 1.9;
+    var vel = 3.5 + Math.random() * 6;
+    pecas.push({
+      tipo: 'confete',
+      inicio: agora, vida: 1000 + Math.random() * 300,
+      x: caixa.left + Math.random() * caixa.width,
+      y: caixa.top + caixa.height / 2,
+      vx: Math.cos(ang) * vel,
+      vy: Math.sin(ang) * vel,
+      peso: 0.10 + Math.random() * 0.10,
+      larg: 3 + Math.random() * 3,
+      alt: 2 + Math.random() * 3,
+      giro: Math.random() * Math.PI,
+      vgiro: (Math.random() - 0.5) * 0.5,
+      cor: ['#fde68a', '#fbbf24', '#f59e0b', '#fff7d6'][j % 4]
+    });
+  }
+  ligarLaco();
+}
 
-      ctx.save();
-      ctx.globalAlpha = Math.max(0, 1 - t * t);
-      ctx.translate(p.x, p.y);
-      ctx.rotate(p.giro);
-      ctx.fillStyle = p.cor;
-      ctx.fillRect(-p.larg / 2, -p.alt / 2, p.larg, p.alt);
-      ctx.restore();
-    }
-    requestAnimationFrame(quadro);
-  })();
+function sacudirTela() {
+  if (!dados.efeitos) return;
+  var m = document.querySelector('main');
+  m.classList.remove('sacode');
+  void m.offsetWidth;              // reinicia a animação se ela já estava rodando
+  m.classList.add('sacode');
+  setTimeout(function () { m.classList.remove('sacode'); }, 500);
 }
 
 var FLASHES = ['flash-certo', 'flash-errou', 'flash-naoSabe', 'flash-recusou'];
@@ -514,6 +640,65 @@ function renderSortear() {
   }
 
   atualizarDesfazer();
+}
+
+/* ---------- segurar o botão: a resposta vale o dobro ---------- */
+
+var SEGURAR_MS = 1000;   // quanto tempo de dedo no botão para valer o dobro
+
+// enquanto o dedo fica no botão, a barra dentro dele enche. ao encher de vez,
+// o botão estoura, sai fumaça dourada e a resposta é registrada valendo dobro.
+function comecarSegurar(botao, resultado, e) {
+  if (girando || travado || !sorteado) return;
+  if (e.button != null && e.button > 0) return;     // só o botão principal do mouse
+
+  soltarSegurar();
+  segurando = { botao: botao, resultado: resultado, inicio: Date.now(), raf: 0 };
+  botao.style.setProperty('--carga', '0');   // zera antes de acender, nunca depois
+  botao.classList.add('segurando');
+  vibrar(8);
+  segurando.raf = requestAnimationFrame(passoSegurar);
+}
+
+function passoSegurar() {
+  if (!segurando) return;
+  var p = (Date.now() - segurando.inicio) / SEGURAR_MS;
+  if (p > 1) p = 1;
+  segurando.botao.style.setProperty('--carga', p.toFixed(3));
+
+  if (p >= 1) { estourarDobro(); return; }
+  segurando.raf = requestAnimationFrame(passoSegurar);
+}
+
+function soltarSegurar() {
+  if (!segurando) return;
+  cancelAnimationFrame(segurando.raf);
+  segurando.botao.classList.remove('segurando');
+  segurando.botao.style.setProperty('--carga', '0');
+  segurando = null;
+}
+
+function estourarDobro() {
+  var botao = segurando.botao;
+  var resultado = segurando.resultado;
+  soltarSegurar();
+
+  travado = true;                       // ninguém registra nada durante o estouro
+
+  botao.classList.remove('estourou');
+  void botao.offsetWidth;
+  botao.classList.add('estourou');
+
+  fumacaDourada(botao.getBoundingClientRect());
+  sacudirTela();
+  vibrar([26, 34, 70]);
+
+  // o registro espera o estouro aparecer; só depois a tela volta ao repouso
+  setTimeout(function () {
+    botao.classList.remove('estourou');
+    travado = false;
+    registrar(resultado, true);
+  }, 340);
 }
 
 function sortear() {
@@ -628,6 +813,20 @@ function chamarVoluntario(alunoId) {
   renderSortear();
 }
 
+// desiste do nome que está no palco. nada é registrado e ninguém gasta a vez:
+// o aluno só entra na lista de "já caíram" quando um resultado é registrado.
+function cancelarSorteio(chamarOutro) {
+  if (girando || travado || !sorteado) return;
+  soltarSegurar();
+  sorteado = null;
+
+  repouso(chamarOutro ? 'Quem se ofereceu?' : 'Sorteio cancelado',
+          chamarOutro ? 'escolha o nome na lista' : 'ninguém foi registrado, ninguém gastou a vez');
+  renderSortear();
+
+  if (chamarOutro) abrirVoluntario();
+}
+
 function abrirVoluntario() {
   var t = turmaAtual();
   if (!t.alunos.length) {
@@ -690,8 +889,8 @@ function renderBusca() {
   });
 }
 
-function registrar(resultado) {
-  if (!sorteado || girando) return;
+function registrar(resultado, dobro) {
+  if (!sorteado || girando || travado) return;
   var t = turmaAtual();
   var aluno = alunoPorId(t, sorteado);
   if (!aluno) { repouso('Pronto?', 'Toque no botão para sortear'); return; }
@@ -703,6 +902,7 @@ function registrar(resultado) {
     resultado: resultado,
     data: new Date().toISOString()
   };
+  if (dobro) reg.mult = 2;   // só grava quando é dobro; o normal fica sem campo
   dados.registros.push(reg);
 
   // quem se ofereceu pode já ter caído nesta rodada; guardo isso para o desfazer
@@ -712,29 +912,31 @@ function registrar(resultado) {
   ultimaAcao = {
     tipo: 'registro', registroId: reg.id, turmaId: t.id,
     alunoId: aluno.id, nome: aluno.nome, resultado: resultado,
-    jaNaRodada: jaNaRodada
+    jaNaRodada: jaNaRodada, dobro: !!dobro
   };
   salvar();
 
   sorteado = null;
   $('#palco').classList.remove('revelado');
   $('#palcoNome').textContent = aluno.nome;
-  $('#palcoDica').textContent = '✓ ' + ROTULOS[resultado] + ' · ' + comSinal(dados.pesos[resultado]);
+  $('#palcoDica').textContent = '✓ ' + ROTULOS[resultado] + ' · ' +
+    comSinal(dados.pesos[resultado] * (dobro ? 2 : 1)) + (dobro ? ' ⚡ em dobro' : '');
   $('#acoesResultado').classList.add('oculto');
   $('#acoesSorteio').classList.remove('oculto');
   $('#btnSortear').disabled = false;
 
-  comemorar(resultado, sequencia(t));
+  comemorar(resultado, sequencia(t), dobro);
   renderSortear();
 }
 
 // a parte bonita: pisca a moldura na cor do resultado e joga confete no acerto
-function comemorar(resultado, seq) {
+function comemorar(resultado, seq, dobro) {
   piscarPalco(resultado);
 
   if (resultado === 'certo') {
-    festa(['#34d399', '#7c5cff', '#22d3ee', '#fbbf24', '#ffffff'],
-          Math.min(45 + seq * 14, 120));
+    festa(dobro ? ['#fbbf24', '#fde68a', '#f59e0b', '#34d399', '#ffffff']
+                : ['#34d399', '#7c5cff', '#22d3ee', '#fbbf24', '#ffffff'],
+          Math.min((dobro ? 70 : 45) + seq * 14, 130));
     vibrar([18, 45, 18]);
   } else if (resultado === 'errou') {
     festa(['#fbbf24', '#f59e0b', '#ffffff'], 24);
@@ -767,7 +969,8 @@ function atualizarDesfazer() {
   caixa.classList.remove('oculto');
   $('#desfazerTexto').textContent = ultimaAcao.tipo === 'falta'
     ? ultimaAcao.nome + ': falta'
-    : ultimaAcao.nome + ': ' + (ROTULOS[ultimaAcao.resultado] || 'registrado');
+    : ultimaAcao.nome + ': ' + (ROTULOS[ultimaAcao.resultado] || 'registrado') +
+      (ultimaAcao.dobro ? ' ⚡' : '');
 }
 
 function desfazer() {
@@ -854,6 +1057,12 @@ function renderNotas() {
       pi.title = ROTULOS[k];
       pills.appendChild(pi);
     });
+
+    if (l.dobros) {
+      var pd = cria('i', 'dobro', '⚡ ' + l.dobros);
+      pd.title = l.dobros === 1 ? '1 pergunta desafiadora' : l.dobros + ' perguntas desafiadoras';
+      pills.appendChild(pd);
+    }
     info.appendChild(pills);
     b.appendChild(info);
 
@@ -917,7 +1126,8 @@ function abrirAluno(alunoId) {
   });
 
   $('#dlgAlunoResumo').textContent = stat.vezes
-    ? 'Nota ' + num(stat.nota) + ' · ' + stat.vezes + ' sorteios · ' + partes.join(', ')
+    ? 'Nota ' + num(stat.nota) + ' · ' + stat.vezes + ' sorteios' +
+      (stat.dobros ? ' (' + stat.dobros + ' em dobro)' : '') + ' · ' + partes.join(', ')
     : 'Ainda não foi sorteado nenhuma vez.';
 
   var hist = $('#dlgAlunoHistorico');
@@ -930,11 +1140,13 @@ function abrirAluno(alunoId) {
       var linha = cria('div', 'item-hist');
       linha.appendChild(cria('span', 'data', dataCurta(r.data)));
 
+      var m = multiploDe(r);
+
       var sel = document.createElement('select');
       Object.keys(ROTULOS).forEach(function (k) {
         var op = document.createElement('option');
         op.value = k;
-        op.textContent = ROTULOS[k] + ' (' + comSinal(dados.pesos[k]) + ')';
+        op.textContent = ROTULOS[k] + ' (' + comSinal(dados.pesos[k] * m) + ')';
         if (k === r.resultado) op.selected = true;
         sel.appendChild(op);
       });
@@ -945,6 +1157,19 @@ function abrirAluno(alunoId) {
         renderNotas();
       });
       linha.appendChild(sel);
+
+      // liga e desliga o dobro depois, caso tenha esquecido na hora da aula
+      var chaveDobro = cria('button', 'marca-dobro' + (m > 1 ? ' ligado' : ''), '⚡×2');
+      chaveDobro.type = 'button';
+      chaveDobro.title = m > 1 ? 'Pergunta desafiadora (toque para voltar ao normal)'
+                               : 'Marcar como pergunta desafiadora';
+      chaveDobro.addEventListener('click', function () {
+        if (multiploDe(r) > 1) delete r.mult; else r.mult = 2;
+        salvar();
+        abrirAluno(alunoId);
+        renderNotas();
+      });
+      linha.appendChild(chaveDobro);
 
       var tirar = cria('button', 'tirar', '✕');
       tirar.type = 'button';
@@ -1086,7 +1311,8 @@ function exportarBackup() {
 
 function exportarNotas() {
   var t = turmaAtual();
-  var linhas = [['Aluno', 'Sorteios', 'Certo', 'Errou', 'Nao sabe', 'Recusou', 'Pontos', 'Nota (0 a 10)']];
+  var linhas = [['Aluno', 'Sorteios', 'Certo', 'Errou', 'Nao sabe', 'Recusou',
+                 'Perguntas em dobro', 'Pontos', 'Nota (0 a 10)']];
 
   estatisticas(t)
     .sort(function (a, b) { return a.aluno.nome.localeCompare(b.aluno.nome, 'pt-BR'); })
@@ -1094,7 +1320,7 @@ function exportarNotas() {
       var c = { certo: 0, errou: 0, naoSabe: 0, recusou: 0 };
       s.registros.forEach(function (r) { if (c[r.resultado] !== undefined) c[r.resultado]++; });
       linhas.push([
-        s.aluno.nome, s.vezes, c.certo, c.errou, c.naoSabe, c.recusou,
+        s.aluno.nome, s.vezes, c.certo, c.errou, c.naoSabe, c.recusou, s.dobros,
         num(s.soma), s.nota === null ? '' : num(s.nota)
       ]);
     });
@@ -1105,7 +1331,7 @@ function exportarNotas() {
 
 function exportarRegistros() {
   var t = turmaAtual();
-  var linhas = [['Data', 'Hora', 'Aluno', 'Resultado', 'Pontos']];
+  var linhas = [['Data', 'Hora', 'Aluno', 'Resultado', 'Pergunta', 'Pontos']];
 
   dados.registros
     .filter(function (r) { return r.turmaId === t.id; })
@@ -1113,12 +1339,14 @@ function exportarRegistros() {
     .forEach(function (r) {
       var aluno = alunoPorId(t, r.alunoId);
       var d = new Date(r.data);
+      var m = multiploDe(r);
       linhas.push([
         isNaN(d) ? '' : d.toLocaleDateString('pt-BR'),
         isNaN(d) ? '' : d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
         aluno ? aluno.nome : '(aluno removido)',
         ROTULOS[r.resultado] || r.resultado,
-        num(dados.pesos[r.resultado] || 0)
+        m > 1 ? 'Desafiadora (dobro)' : 'Normal',
+        num((dados.pesos[r.resultado] || 0) * m)
       ]);
     });
 
@@ -1165,6 +1393,7 @@ function carregarConserto() {
   if (!turmaAtual()) dados.turmaAtiva = dados.turmas[0].id;
   ultimaAcao = null;
   sorteado = null;
+  soltarSegurar();
 }
 
 /* ---------- janelas ---------- */
@@ -1190,11 +1419,38 @@ function ligarEventos() {
   $('#btnSortear').addEventListener('click', sortear);
 
   $$('.res[data-res]').forEach(function (b) {
-    b.addEventListener('click', function () { registrar(b.dataset.res); });
+    // toque rápido registra o normal; segurar 1 segundo registra valendo o dobro
+    b.addEventListener('click', function () { registrar(b.dataset.res, false); });
+
+    if (window.PointerEvent) {
+      b.addEventListener('pointerdown', function (e) { comecarSegurar(b, b.dataset.res, e); });
+      b.addEventListener('pointerup', soltarSegurar);
+      b.addEventListener('pointerleave', soltarSegurar);
+      b.addEventListener('pointercancel', soltarSegurar);
+    } else {
+      b.addEventListener('touchstart', function (e) { comecarSegurar(b, b.dataset.res, e); });
+      b.addEventListener('touchend', soltarSegurar);
+      b.addEventListener('touchcancel', soltarSegurar);
+      b.addEventListener('mousedown', function (e) { comecarSegurar(b, b.dataset.res, e); });
+      b.addEventListener('mouseup', soltarSegurar);
+      b.addEventListener('mouseleave', soltarSegurar);
+    }
+
+    // sem menu de "copiar" ao segurar o botão
+    b.addEventListener('contextmenu', function (e) { e.preventDefault(); });
+  });
+
+  // se a aula for interrompida (troca de app, tela apagando), solta o gesto
+  window.addEventListener('blur', soltarSegurar);
+  document.addEventListener('visibilitychange', function () {
+    if (document.hidden) soltarSegurar();
   });
 
   $('#btnFaltou').addEventListener('click', marcarFalta);
   $('#btnDesfazer').addEventListener('click', desfazer);
+
+  $('#btnCancelarSorteio').addEventListener('click', function () { cancelarSorteio(false); });
+  $('#btnTrocarVoluntario').addEventListener('click', function () { cancelarSorteio(true); });
 
   $('#btnVoluntario').addEventListener('click', abrirVoluntario);
   $('#btnVoluntarioCancelar').addEventListener('click', function () { fecharJanela($('#dlgVoluntario')); });
@@ -1227,6 +1483,7 @@ function ligarEventos() {
   $('#seletorTurma').addEventListener('change', function (e) {
     dados.turmaAtiva = e.target.value;
     ultimaAcao = null;
+    soltarSegurar();
     salvar();
     repouso('Pronto?', 'Toque no botão para sortear');
     renderTurma();

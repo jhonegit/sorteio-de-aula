@@ -62,15 +62,26 @@
 
     <div id="acoesResultado" class="acoes-resultado oculto">
       <button class="res certo" data-res="certo" type="button">
+        <span class="carga" aria-hidden="true"></span>
         <span class="res-ico" aria-hidden="true">✓</span><b>Respondeu certo</b><i data-peso="certo">+1,0</i></button>
       <button class="res errou" data-res="errou" type="button">
+        <span class="carga" aria-hidden="true"></span>
         <span class="res-ico" aria-hidden="true">≈</span><b>Respondeu, mas errou</b><i data-peso="errou">+0,7</i></button>
       <button class="res naosabe" data-res="naoSabe" type="button">
+        <span class="carga" aria-hidden="true"></span>
         <span class="res-ico" aria-hidden="true">?</span><b>Disse que não sabe</b><i data-peso="naoSabe">+0,4</i></button>
       <button class="res recusou" data-res="recusou" type="button">
+        <span class="carga" aria-hidden="true"></span>
         <span class="res-ico" aria-hidden="true">✕</span><b>Se recusou a responder</b><i data-peso="recusou">0</i></button>
       <button class="res faltou" id="btnFaltou" type="button">
         <span class="res-ico" aria-hidden="true">↻</span><b>Faltou</b><i>sorteia outro</i></button>
+
+      <div class="acoes-menores">
+        <button id="btnCancelarSorteio" class="menor" type="button">↩ Cancelar sorteio</button>
+        <button id="btnTrocarVoluntario" class="menor" type="button">✋ Chamar quem se ofereceu</button>
+      </div>
+
+      <p class="dica-dobro">segure o botão por 1 segundo para a resposta valer o dobro ⚡</p>
     </div>
 
     <div id="desfazer" class="desfazer oculto">
@@ -93,7 +104,7 @@
     </div>
     <div id="placarTurma" class="placar"></div>
     <div id="listaNotas" class="lista-notas"></div>
-    <p class="ajuda">A nota é a média dos pontos do aluno multiplicada por 10. Toque num nome para ver ou corrigir o histórico dele.</p>
+    <p class="ajuda">A nota é a média dos pontos do aluno multiplicada por 10. Pergunta desafiadora (⚡) pesa por duas na média. Toque num nome para ver ou corrigir o histórico dele.</p>
   </section>
 
   <!-- ============ TURMA ============ -->
@@ -138,7 +149,7 @@
         <div class="peso naosabe"><span>Disse que não sabe</span><input type="text" id="peso-naoSabe" inputmode="decimal" autocomplete="off"></div>
         <div class="peso recusou"><span>Se recusou a responder</span><input type="text" id="peso-recusou" inputmode="decimal" autocomplete="off"></div>
       </div>
-      <p class="ajuda">Mudar aqui recalcula as notas de tudo que já foi registrado, inclusive das aulas passadas.</p>
+      <p class="ajuda">Mudar aqui recalcula as notas de tudo que já foi registrado, inclusive das aulas passadas. Segurando o botão do resultado por 1 segundo, esses valores contam em dobro naquela resposta.</p>
     </div>
 
     <div class="bloco">

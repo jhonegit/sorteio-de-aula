@@ -372,20 +372,28 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, button:focus-
 
 .acoes-sorteio { display: grid; gap: .55rem; }
 
+/* cor e distância próprias, para não ser confundido com o botão de sortear */
 .btn-voluntario {
   display: flex;
   align-items: center;
   justify-content: center;
   gap: .45rem;
   width: 100%;
+  margin-top: .25rem;
   padding: .75rem 1rem;
   font-size: .92rem;
   font-weight: 600;
+  color: #a5f3fc;
+  background: rgba(34, 211, 238, .07);
+  border-color: rgba(34, 211, 238, .35);
 }
 
 .acoes-resultado { display: grid; gap: .5rem; animation: entra .22s ease-out; }
 
 .res {
+  --carga: 0;              /* o quanto a barra dentro do botão já encheu, de 0 a 1 */
+  position: relative;
+  overflow: hidden;
   display: grid;
   grid-template-columns: auto 1fr auto;
   align-items: center;
@@ -396,9 +404,17 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, button:focus-
   border: 1px solid var(--borda);
   color: var(--texto);
   font-weight: 500;
+  /* segurar o botão é um gesto do app: o aparelho não deve tratar como seleção */
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
 }
 
 .res b { font-weight: 620; font-size: .94rem; }
+
+/* o conteúdo fica por cima da barra que enche o botão */
+.res .res-ico, .res b, .res i { position: relative; z-index: 1; }
 
 .res i {
   font-style: normal;
@@ -446,6 +462,94 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, button:focus-
 
 .res.faltou .res-ico { background: rgba(255, 255, 255, .06); color: var(--fraco); }
 .res.faltou b { font-weight: 550; }
+
+/* ---------- segurar o botão: vale o dobro ---------- */
+
+/* a barra é o próprio botão se enchendo de dourado, da esquerda para a direita */
+.carga {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  z-index: 0;
+  width: calc(var(--carga, 0) * 100%);
+  pointer-events: none;
+  background: linear-gradient(90deg, rgba(251, 191, 36, .16), rgba(251, 191, 36, .5));
+  box-shadow: 0 0 18px rgba(251, 191, 36, .45);
+}
+
+/* a ponta acesa, que corre junto com a barra */
+.carga::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  right: 0;
+  width: 2px;
+  background: #fde68a;
+  box-shadow: 0 0 10px 2px rgba(253, 230, 138, .9);
+  opacity: calc(var(--carga, 0) * 3);
+}
+
+/* cresce e treme cada vez mais forte conforme a barra enche */
+.res.segurando {
+  border-color: rgba(251, 191, 36, .65);
+  animation: segurando .09s linear infinite;
+}
+
+.res.segurando i { background: rgba(251, 191, 36, .25); color: #fcd34d; }
+.res.segurando .res-ico { transform: scale(calc(1 + var(--carga, 0) * .18)); }
+
+@keyframes segurando {
+  0%   { transform: scale(calc(1 + var(--carga) * .045)) translate(calc(var(--carga) * -2px), 0); }
+  25%  { transform: scale(calc(1 + var(--carga) * .045)) translate(calc(var(--carga) * 2px), calc(var(--carga) * -1px)); }
+  50%  { transform: scale(calc(1 + var(--carga) * .045)) translate(calc(var(--carga) * -1px), calc(var(--carga) * 1px)); }
+  75%  { transform: scale(calc(1 + var(--carga) * .045)) translate(calc(var(--carga) * 2px), 0); }
+  100% { transform: scale(calc(1 + var(--carga) * .045)) translate(calc(var(--carga) * -2px), 0); }
+}
+
+/* o estouro no fim do tempo de segurar */
+.res.estourou { animation: estourou .5s cubic-bezier(.16, 1.2, .3, 1); }
+
+@keyframes estourou {
+  0%   { transform: scale(1.05); border-color: #fde68a; box-shadow: 0 0 0 2px rgba(253, 230, 138, .9), 0 0 60px 6px rgba(251, 191, 36, .75); }
+  40%  { transform: scale(1.14); box-shadow: 0 0 0 3px rgba(253, 230, 138, .55), 0 0 80px 14px rgba(251, 191, 36, .5); }
+  100% { transform: none; box-shadow: none; }
+}
+
+/* a sacudida da tela inteira no estouro */
+main.sacode { animation: sacode .42s cubic-bezier(.36, .07, .19, .97); }
+
+@keyframes sacode {
+  10%, 90% { transform: translate3d(-2px, 1px, 0); }
+  20%, 80% { transform: translate3d(4px, -2px, 0); }
+  30%, 50%, 70% { transform: translate3d(-6px, 2px, 0); }
+  40%, 60% { transform: translate3d(6px, -1px, 0); }
+}
+
+/* saídas do sorteio, para quando o botão apertado não era o que se queria */
+.acoes-menores { display: flex; gap: .5rem; margin-top: .4rem; }
+
+.menor {
+  flex: 1;
+  background: none;
+  border: 1px solid var(--borda);
+  color: var(--fraco);
+  font-size: .78rem;
+  font-weight: 600;
+  padding: .5rem .35rem;
+  border-radius: 10px;
+}
+
+#btnTrocarVoluntario { border-color: rgba(34, 211, 238, .3); color: #a5f3fc; }
+
+.dica-dobro {
+  margin: .15rem 0 0;
+  text-align: center;
+  font-size: .72rem;
+  color: var(--fraco);
+  letter-spacing: .01em;
+}
 
 .desfazer {
   display: flex;
@@ -578,6 +682,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, button:focus-
 .pills i.errou   { background: rgba(251, 191, 36, .17);  color: var(--ambar); }
 .pills i.naoSabe { background: rgba(148, 163, 184, .17); color: var(--cinza); }
 .pills i.recusou { background: rgba(251, 113, 133, .17); color: var(--vermelho); }
+.pills i.dobro   { background: rgba(251, 191, 36, .17);  color: #fcd34d; margin-left: .15rem; }
 
 .nota-caixa { text-align: right; flex: 0 0 auto; }
 
@@ -769,6 +874,19 @@ dialog textarea { margin-top: .6rem; resize: vertical; font-size: .95rem; }
 .item-hist .data { font-size: .74rem; color: var(--fraco); white-space: nowrap; font-variant-numeric: tabular-nums; }
 .item-hist select { flex: 1; padding: .4rem .5rem; font-size: .82rem; }
 .item-hist .tirar { background: none; color: var(--vermelho); padding: .3rem .5rem; font-size: 1rem; line-height: 1; }
+
+.item-hist .marca-dobro {
+  flex: 0 0 auto;
+  padding: .3rem .4rem;
+  font-size: .72rem;
+  font-weight: 800;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, .06);
+  border: 1px solid var(--borda);
+  color: var(--fraco);
+}
+
+.item-hist .marca-dobro.ligado { background: rgba(251, 191, 36, .18); border-color: rgba(251, 191, 36, .45); color: #fcd34d; }
 
 /* ---------- rodapé ---------- */
 
