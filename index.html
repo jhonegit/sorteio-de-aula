@@ -104,7 +104,7 @@
     </div>
     <div id="placarTurma" class="placar"></div>
     <div id="listaNotas" class="lista-notas"></div>
-    <p class="ajuda">A nota é a média dos pontos do aluno multiplicada por 10. Pergunta desafiadora (⚡) pesa por duas na média. Toque num nome para ver ou corrigir o histórico dele.</p>
+    <p class="ajuda">A nota é a média dos pontos do aluno multiplicada por 10. Conta tudo: sorteio, quem se ofereceu e atividade. O que tem peso extra (⚡) pesa por dois ou três na média. Toque num nome para ver ou corrigir o histórico dele.</p>
   </section>
 
   <!-- ============ TURMA ============ -->
@@ -132,6 +132,16 @@
     </div>
 
     <div class="bloco">
+      <label>Atividades</label>
+      <button id="btnAtividade" type="button">📋 Lançar atividade para a turma</button>
+      <div id="desfazerAtividade" class="desfazer oculto">
+        <span id="desfazerAtividadeTexto"></span>
+        <button id="btnDesfazerAtividade" type="button">Desfazer</button>
+      </div>
+      <p class="ajuda">Marca de uma vez quem fez, quem fez em parte e quem faltou. Quem você não marcar entra como "não fez": vale zero, mas fica registrado que teve a chance. Quem já foi marcado como falta hoje no sorteio vem marcado assim sozinho. Ninguém gasta a vez no sorteio.</p>
+    </div>
+
+    <div class="bloco">
       <button id="btnReiniciarRodada" class="secundario" type="button">Reiniciar a rodada</button>
       <p class="ajuda">Todo mundo volta para o sorteio, mesmo quem já caiu. Nenhuma nota é apagada.</p>
     </div>
@@ -149,7 +159,7 @@
         <div class="peso naosabe"><span>Disse que não sabe</span><input type="text" id="peso-naoSabe" inputmode="decimal" autocomplete="off"></div>
         <div class="peso recusou"><span>Se recusou a responder</span><input type="text" id="peso-recusou" inputmode="decimal" autocomplete="off"></div>
       </div>
-      <p class="ajuda">Mudar aqui recalcula as notas de tudo que já foi registrado, inclusive das aulas passadas. Segurando o botão do resultado por 1 segundo, esses valores contam em dobro naquela resposta.</p>
+      <p class="ajuda">Mudar aqui recalcula as notas de tudo que já foi registrado, inclusive das aulas passadas. Estes mesmos valores servem para as atividades: quem fez ganha o de "respondeu certo", quem fez em parte o de "errou", quem não fez o de "se recusou".</p>
     </div>
 
     <div class="bloco">
@@ -208,6 +218,37 @@
   <div id="listaVoluntario" class="lista-busca"></div>
   <div class="linha-botoes">
     <button id="btnVoluntarioCancelar" class="secundario" type="button">Cancelar</button>
+  </div>
+</dialog>
+
+<dialog id="dlgAtividade">
+  <h2>Lançar atividade</h2>
+
+  <input id="nomeAtividade" class="campo-busca" type="text" placeholder="Nome da atividade (ex.: exercícios pág. 42)"
+         autocomplete="off" autocapitalize="sentences">
+
+  <div class="linha-peso">
+    <span class="rotulo-peso">Peso</span>
+    <div id="pesoAtividade" class="chips-peso">
+      <button type="button" class="chip-peso ativo" data-mult="1">×1</button>
+      <button type="button" class="chip-peso" data-mult="2">×2</button>
+      <button type="button" class="chip-peso" data-mult="3">×3</button>
+    </div>
+    <small id="explicaPeso">conta como 1 participação</small>
+  </div>
+
+  <div class="atalhos-ativ">
+    <button id="btnTodosFizeram" class="menor" type="button">✓ Todos fizeram</button>
+    <button id="btnLimparAtividade" class="menor" type="button">Limpar marcações</button>
+  </div>
+
+  <div id="listaAtividade" class="lista-ativ"></div>
+
+  <p id="resumoAtividade" class="resumo-ativ"></p>
+
+  <div class="linha-botoes">
+    <button id="btnAtividadeCancelar" class="secundario" type="button">Cancelar</button>
+    <button id="btnAtividadeLancar" type="button">Lançar</button>
   </div>
 </dialog>
 

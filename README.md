@@ -25,7 +25,14 @@ Funciona no celular, instalado como aplicativo, e abre sem internet.
   resultado, segurar ele por 1 segundo. O botão vai enchendo de dourado, treme,
   estoura em fumaça no fim e aquela resposta conta como duas participações na
   média. Toque rápido segue valendo o normal.
-- Quanto vale cada resultado é ajustável dentro do app, em Ajustes.
+- Atividade fora do sorteio: em Turmas dá para lançar uma de uma vez para a
+  turma inteira, marcando quem fez, quem fez em parte e quem faltou. Quem não
+  for marcado entra como "não fez": vale zero, mas fica registrado que teve a
+  chance. A atividade pode valer ×1, ×2 ou ×3, cai na mesma nota do sorteio e
+  não gasta a vez de ninguém na rodada. O lançamento inteiro pode ser desfeito.
+- Quanto vale cada resultado é ajustável dentro do app, em Ajustes. Os mesmos
+  valores servem para as atividades: fez vale o de "respondeu certo", fez em
+  parte o de "errou", não fez o de "se recusou".
 - Confete no acerto, vibração e sequência de acertos da turma. Dá para desligar
   tudo isso em Ajustes se o dia pedir algo mais discreto.
 

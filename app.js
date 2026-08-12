@@ -14,8 +14,21 @@ var ROTULOS = {
   recusou: 'Se recusou a responder'
 };
 
+// numa atividade os mesmos resultados ganham outro nome, que faz mais sentido
+// para dever de casa: o registro é do mesmo tipo, só a palavra muda
+var ROTULOS_ATIV = {
+  certo:   'Fez a atividade',
+  errou:   'Fez em parte',
+  recusou: 'Não fez'
+};
+
 // os mesmos símbolos dos botões, reaproveitados na lista de notas
 var GLIFOS = { certo: '✓', errou: '≈', naoSabe: '?', recusou: '✕' };
+
+function rotulo(resultado, ehAtividade) {
+  if (ehAtividade && ROTULOS_ATIV[resultado]) return ROTULOS_ATIV[resultado];
+  return ROTULOS[resultado] || resultado;
+}
 
 var dados = null;
 var sorteado = null;     // id do aluno que está na tela
@@ -25,6 +38,8 @@ var ordemNotas = 'nome';
 var armazenamentoOk = true;
 var segurando = null;    // botão de resultado que está sendo segurado agora
 var travado = false;     // segura o app durante o estouro do dobro
+
+var MULT_MAX = 3;        // peso máximo que uma oportunidade pode valer
 
 /* ---------- atalhos ---------- */
 
@@ -293,9 +308,11 @@ function disponiveis(turma) {
   });
 }
 
-// pergunta desafiadora conta 2; registro antigo, sem o campo, conta 1
+// quanto aquela oportunidade pesa: pergunta desafiadora conta 2, atividade pode
+// contar até 3. registro antigo, sem o campo, conta 1
 function multiploDe(registro) {
-  return registro.mult === 2 ? 2 : 1;
+  var m = Math.round(Number(registro.mult));
+  return m >= 2 && m <= MULT_MAX ? m : 1;
 }
 
 function estatisticas(turma) {
@@ -1092,12 +1109,12 @@ function renderPlacar(t, linhas) {
   caixa.textContent = '';
 
   var comNota = linhas.filter(function (l) { return l.nota !== null; });
-  var sorteios = linhas.reduce(function (s, l) { return s + l.vezes; }, 0);
+  var oportunidades = linhas.reduce(function (s, l) { return s + l.vezes; }, 0);
   var media = comNota.length
     ? comNota.reduce(function (s, l) { return s + l.nota; }, 0) / comNota.length
     : null;
 
-  [[String(sorteios), 'sorteios'],
+  [[String(oportunidades), 'participações'],
    [media === null ? '—' : num(media), 'média'],
    [String(t.alunos.length), 'alunos']].forEach(function (par) {
     var d = document.createElement('div');
@@ -1125,10 +1142,12 @@ function abrirAluno(alunoId) {
     if (contagem[k]) partes.push(contagem[k] + ' × ' + ROTULOS[k].toLowerCase());
   });
 
+  var deAtividade = stat.registros.filter(function (r) { return r.atividade; }).length;
+
   $('#dlgAlunoResumo').textContent = stat.vezes
-    ? 'Nota ' + num(stat.nota) + ' · ' + stat.vezes + ' sorteios' +
-      (stat.dobros ? ' (' + stat.dobros + ' em dobro)' : '') + ' · ' + partes.join(', ')
-    : 'Ainda não foi sorteado nenhuma vez.';
+    ? 'Nota ' + num(stat.nota) + ' · ' + stat.vezes + ' oportunidades' +
+      (deAtividade ? ' (' + deAtividade + ' de atividade)' : '') + ' · ' + partes.join(', ')
+    : 'Ainda não teve nenhuma oportunidade.';
 
   var hist = $('#dlgAlunoHistorico');
   hist.textContent = '';
@@ -1138,6 +1157,14 @@ function abrirAluno(alunoId) {
     .sort(function (a, b) { return String(b.data).localeCompare(String(a.data)); })
     .forEach(function (r) {
       var linha = cria('div', 'item-hist');
+
+      // veio de uma atividade? o nome dela aparece por cima, ocupando a linha
+      if (r.atividade) {
+        var tag = cria('span', 'tag-ativ', '📋 ' + r.atividade);
+        tag.title = 'Atividade: ' + r.atividade;
+        linha.appendChild(tag);
+      }
+
       linha.appendChild(cria('span', 'data', dataCurta(r.data)));
 
       var m = multiploDe(r);
@@ -1146,7 +1173,7 @@ function abrirAluno(alunoId) {
       Object.keys(ROTULOS).forEach(function (k) {
         var op = document.createElement('option');
         op.value = k;
-        op.textContent = ROTULOS[k] + ' (' + comSinal(dados.pesos[k] * m) + ')';
+        op.textContent = rotulo(k, r.atividade) + ' (' + comSinal(dados.pesos[k] * m) + ')';
         if (k === r.resultado) op.selected = true;
         sel.appendChild(op);
       });
@@ -1158,13 +1185,13 @@ function abrirAluno(alunoId) {
       });
       linha.appendChild(sel);
 
-      // liga e desliga o dobro depois, caso tenha esquecido na hora da aula
-      var chaveDobro = cria('button', 'marca-dobro' + (m > 1 ? ' ligado' : ''), '⚡×2');
+      // muda o peso depois, caso tenha esquecido na hora da aula: ×1, ×2, ×3 e volta
+      var chaveDobro = cria('button', 'marca-dobro' + (m > 1 ? ' ligado' : ''), '⚡×' + m);
       chaveDobro.type = 'button';
-      chaveDobro.title = m > 1 ? 'Pergunta desafiadora (toque para voltar ao normal)'
-                               : 'Marcar como pergunta desafiadora';
+      chaveDobro.title = 'Peso desta oportunidade (toque para mudar)';
       chaveDobro.addEventListener('click', function () {
-        if (multiploDe(r) > 1) delete r.mult; else r.mult = 2;
+        var novo = multiploDe(r) + 1;
+        if (novo > MULT_MAX) delete r.mult; else r.mult = novo;
         salvar();
         abrirAluno(alunoId);
         renderNotas();
@@ -1207,6 +1234,7 @@ function renderTurma() {
   });
 
   $('#contaAlunos').textContent = t.alunos.length;
+  renderDesfazerAtividade();
 
   var lista = $('#listaAlunos');
   lista.textContent = '';
@@ -1267,6 +1295,178 @@ function adicionarAlunos(nomes) {
   return adicionados;
 }
 
+/* ---------- atividades ---------- */
+
+/* Uma atividade é a mesma coisa que um sorteio, só que para a turma inteira de
+   uma vez: cada aluno ganha um registro comum, com o nome da atividade junto.
+   Por isso a nota é uma só, e nada do que já estava guardado precisa mudar.
+   O que a atividade NÃO faz: mexer na rodada do sorteio. Ninguém gasta a vez. */
+
+// quem você não marcar entra como "não fez", que era o pedido
+var ESTADOS_ATIV = [
+  { chave: 'fez',    glifo: '✓', classe: 'certo',   resultado: 'certo',   titulo: 'Fez' },
+  { chave: 'parte',  glifo: '≈', classe: 'errou',   resultado: 'errou',   titulo: 'Fez em parte' },
+  { chave: 'nao',    glifo: '✕', classe: 'recusou', resultado: 'recusou', titulo: 'Não fez' },
+  { chave: 'faltou', glifo: '↻', classe: 'faltou',  resultado: null,      titulo: 'Faltou (não conta nada)' }
+];
+
+var marcasAtiv = {};      // alunoId -> estado marcado à mão
+var multAtiv = 1;         // peso escolhido para esta atividade
+var ultimoLote = null;    // o lançamento que ainda dá para desfazer
+
+function estadoAtiv(alunoId) {
+  return marcasAtiv[alunoId] || 'nao';
+}
+
+function contarAtiv(turma) {
+  var c = { fez: 0, parte: 0, nao: 0, faltou: 0 };
+  turma.alunos.forEach(function (a) { c[estadoAtiv(a.id)]++; });
+  return c;
+}
+
+function abrirAtividade() {
+  var t = turmaAtual();
+  if (!t.alunos.length) {
+    alert('Cadastre os alunos desta turma antes de lançar uma atividade.');
+    return;
+  }
+  marcasAtiv = {};
+  multAtiv = 1;
+
+  // quem você já marcou como falta hoje, no sorteio, entra aqui como falta
+  ausentes(t.id).forEach(function (id) { marcasAtiv[id] = 'faltou'; });
+
+  $('#nomeAtividade').value = '';
+  renderAtividade();
+  abrirJanela($('#dlgAtividade'));
+}
+
+function renderAtividade() {
+  var t = turmaAtual();
+
+  $$('#pesoAtividade .chip-peso').forEach(function (b) {
+    b.classList.toggle('ativo', Number(b.dataset.mult) === multAtiv);
+  });
+  $('#explicaPeso').textContent = multAtiv === 1
+    ? 'conta como 1 participação'
+    : 'conta como ' + multAtiv + ' participações';
+
+  var caixa = $('#listaAtividade');
+  caixa.textContent = '';
+
+  t.alunos
+    .slice()
+    .sort(function (a, b) { return a.nome.localeCompare(b.nome, 'pt-BR'); })
+    .forEach(function (a) {
+      var marcado = marcasAtiv[a.id];              // sem marca = vai como "não fez"
+      var estado = marcado || 'nao';
+
+      var linha = cria('div', 'ativ-linha' + (marcado ? ' marcado' : ''));
+
+      // tocar no nome é o caminho rápido: liga e desliga o "fez"
+      var nome = cria('button', 'ativ-nome', a.nome);
+      nome.type = 'button';
+      nome.addEventListener('click', function () {
+        if (marcasAtiv[a.id] === 'fez') delete marcasAtiv[a.id];
+        else marcasAtiv[a.id] = 'fez';
+        renderAtividade();
+      });
+      linha.appendChild(nome);
+
+      var grupo = cria('div', 'ativ-botoes');
+      ESTADOS_ATIV.forEach(function (e) {
+        var classes = 'ativ-op ' + e.classe;
+        if (estado === e.chave) classes += marcado ? ' ativo' : ' previsto';
+        var b = cria('button', classes, e.glifo);
+        b.type = 'button';
+        b.title = e.titulo;
+        b.addEventListener('click', function () {
+          if (e.chave === 'nao') delete marcasAtiv[a.id];   // volta ao padrão
+          else marcasAtiv[a.id] = e.chave;
+          renderAtividade();
+        });
+        grupo.appendChild(b);
+      });
+      linha.appendChild(grupo);
+
+      caixa.appendChild(linha);
+    });
+
+  $('#resumoAtividade').textContent = resumoAtiv(contarAtiv(t));
+}
+
+function resumoAtiv(c) {
+  var partes = [];
+  if (c.fez) partes.push(c.fez + ' ' + (c.fez === 1 ? 'fez' : 'fizeram'));
+  if (c.parte) partes.push(c.parte + ' em parte');
+  if (c.faltou) partes.push(c.faltou + ' ' + (c.faltou === 1 ? 'faltou' : 'faltaram'));
+  if (c.nao) partes.push(c.nao + ' ' + (c.nao === 1 ? 'vai' : 'vão') + ' como "não fez"');
+  return partes.join(' · ');
+}
+
+function lancarAtividade() {
+  var t = turmaAtual();
+  var c = contarAtiv(t);
+
+  if (!c.fez && !c.parte && !c.nao) {
+    alert('Todo mundo está marcado como falta. Não há nada para lançar.');
+    return;
+  }
+
+  var nome = $('#nomeAtividade').value.replace(/\s+/g, ' ').trim() || 'Atividade';
+
+  if (!confirm('Lançar "' + nome + '" com peso ×' + multAtiv + '?\n\n' +
+               resumoAtiv(c) + '\n\nA rodada do sorteio não muda: ninguém gasta a vez.')) return;
+
+  var lote = novoId();
+  var quando = new Date().toISOString();
+  var quantos = 0;
+
+  t.alunos.forEach(function (a) {
+    var e = ESTADOS_ATIV.filter(function (x) { return x.chave === estadoAtiv(a.id); })[0];
+    if (!e || !e.resultado) return;              // quem faltou não ganha registro nenhum
+
+    var reg = {
+      id: novoId(),
+      turmaId: t.id,
+      alunoId: a.id,
+      resultado: e.resultado,
+      data: quando,
+      atividade: nome,
+      lote: lote
+    };
+    if (multAtiv > 1) reg.mult = multAtiv;
+    dados.registros.push(reg);
+    quantos++;
+  });
+
+  ultimoLote = { lote: lote, nome: nome, quantos: quantos };
+  salvar();
+
+  fecharJanela($('#dlgAtividade'));
+  renderTurma();
+  renderNotas();
+}
+
+function desfazerAtividade() {
+  if (!ultimoLote) return;
+  var alvo = ultimoLote.lote;
+
+  dados.registros = dados.registros.filter(function (r) { return r.lote !== alvo; });
+  ultimoLote = null;
+  salvar();
+  renderTurma();
+  renderNotas();
+}
+
+function renderDesfazerAtividade() {
+  var caixa = $('#desfazerAtividade');
+  if (!ultimoLote) { caixa.classList.add('oculto'); return; }
+  caixa.classList.remove('oculto');
+  $('#desfazerAtividadeTexto').textContent = '✓ "' + ultimoLote.nome + '" lançada para ' +
+    ultimoLote.quantos + (ultimoLote.quantos === 1 ? ' aluno' : ' alunos');
+}
+
 /* ---------- tela de ajustes ---------- */
 
 function renderAjustes() {
@@ -1311,17 +1511,21 @@ function exportarBackup() {
 
 function exportarNotas() {
   var t = turmaAtual();
-  var linhas = [['Aluno', 'Sorteios', 'Certo', 'Errou', 'Nao sabe', 'Recusou',
-                 'Perguntas em dobro', 'Pontos', 'Nota (0 a 10)']];
+  var linhas = [['Aluno', 'Oportunidades', 'Sendo de atividade', 'Certo', 'Errou',
+                 'Nao sabe', 'Recusou', 'Com peso extra', 'Pontos', 'Nota (0 a 10)']];
 
   estatisticas(t)
     .sort(function (a, b) { return a.aluno.nome.localeCompare(b.aluno.nome, 'pt-BR'); })
     .forEach(function (s) {
       var c = { certo: 0, errou: 0, naoSabe: 0, recusou: 0 };
-      s.registros.forEach(function (r) { if (c[r.resultado] !== undefined) c[r.resultado]++; });
+      var deAtividade = 0;
+      s.registros.forEach(function (r) {
+        if (c[r.resultado] !== undefined) c[r.resultado]++;
+        if (r.atividade) deAtividade++;
+      });
       linhas.push([
-        s.aluno.nome, s.vezes, c.certo, c.errou, c.naoSabe, c.recusou, s.dobros,
-        num(s.soma), s.nota === null ? '' : num(s.nota)
+        s.aluno.nome, s.vezes, deAtividade, c.certo, c.errou, c.naoSabe, c.recusou,
+        s.dobros, num(s.soma), s.nota === null ? '' : num(s.nota)
       ]);
     });
 
@@ -1331,7 +1535,7 @@ function exportarNotas() {
 
 function exportarRegistros() {
   var t = turmaAtual();
-  var linhas = [['Data', 'Hora', 'Aluno', 'Resultado', 'Pergunta', 'Pontos']];
+  var linhas = [['Data', 'Hora', 'Aluno', 'Origem', 'Resultado', 'Peso', 'Pontos']];
 
   dados.registros
     .filter(function (r) { return r.turmaId === t.id; })
@@ -1344,8 +1548,9 @@ function exportarRegistros() {
         isNaN(d) ? '' : d.toLocaleDateString('pt-BR'),
         isNaN(d) ? '' : d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
         aluno ? aluno.nome : '(aluno removido)',
-        ROTULOS[r.resultado] || r.resultado,
-        m > 1 ? 'Desafiadora (dobro)' : 'Normal',
+        r.atividade ? r.atividade : 'Sorteio',
+        rotulo(r.resultado, r.atividade),
+        'x' + m,
         num((dados.pesos[r.resultado] || 0) * m)
       ]);
     });
@@ -1392,6 +1597,7 @@ function carregarConserto() {
   if (!dados.turmas.length) dados.turmas.push({ id: novoId(), nome: 'Turma 1', alunos: [] });
   if (!turmaAtual()) dados.turmaAtiva = dados.turmas[0].id;
   ultimaAcao = null;
+  ultimoLote = null;
   sorteado = null;
   soltarSegurar();
 }
@@ -1478,11 +1684,36 @@ function ligarEventos() {
 
   $('#btnFecharAluno').addEventListener('click', function () { fecharJanela($('#dlgAluno')); });
 
+  /* atividades */
+
+  $('#btnAtividade').addEventListener('click', abrirAtividade);
+  $('#btnAtividadeCancelar').addEventListener('click', function () { fecharJanela($('#dlgAtividade')); });
+  $('#btnAtividadeLancar').addEventListener('click', lancarAtividade);
+  $('#btnDesfazerAtividade').addEventListener('click', desfazerAtividade);
+
+  $$('#pesoAtividade .chip-peso').forEach(function (b) {
+    b.addEventListener('click', function () {
+      multAtiv = Number(b.dataset.mult) || 1;
+      renderAtividade();
+    });
+  });
+
+  $('#btnTodosFizeram').addEventListener('click', function () {
+    turmaAtual().alunos.forEach(function (a) { marcasAtiv[a.id] = 'fez'; });
+    renderAtividade();
+  });
+
+  $('#btnLimparAtividade').addEventListener('click', function () {
+    marcasAtiv = {};
+    renderAtividade();
+  });
+
   /* turmas */
 
   $('#seletorTurma').addEventListener('change', function (e) {
     dados.turmaAtiva = e.target.value;
     ultimaAcao = null;
+    ultimoLote = null;      // o desfazer da atividade era da turma anterior
     soltarSegurar();
     salvar();
     repouso('Pronto?', 'Toque no botão para sortear');

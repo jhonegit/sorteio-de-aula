@@ -1,7 +1,7 @@
 /* Guarda o app no aparelho para abrir sem internet.
    Ao mudar qualquer arquivo, troque o número do CACHE (v1 -> v2 -> v3...). */
 
-var CACHE = 'sorteio-v6';
+var CACHE = 'sorteio-v7';
 
 var ARQUIVOS = [
   './',

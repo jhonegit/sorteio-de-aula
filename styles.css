@@ -888,6 +888,135 @@ dialog textarea { margin-top: .6rem; resize: vertical; font-size: .95rem; }
 
 .item-hist .marca-dobro.ligado { background: rgba(251, 191, 36, .18); border-color: rgba(251, 191, 36, .45); color: #fcd34d; }
 
+/* o nome da atividade ocupa a linha toda, por cima do resultado */
+.item-hist { flex-wrap: wrap; }
+
+.item-hist .tag-ativ {
+  flex: 0 0 100%;
+  font-size: .7rem;
+  color: #a5f3fc;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-bottom: .1rem;
+}
+
+/* ---------- janela de atividade ---------- */
+
+/* a janela inteira vira uma coluna: só a lista de nomes rola, o resto fica fixo */
+#dlgAtividade[open] { display: flex; flex-direction: column; }
+#dlgAtividade[open] > *:not(.lista-ativ) { flex: 0 0 auto; }
+
+.linha-peso {
+  display: flex;
+  align-items: center;
+  gap: .6rem;
+  flex-wrap: wrap;
+  margin-top: .7rem;
+}
+
+.rotulo-peso {
+  font-size: .68rem;
+  text-transform: uppercase;
+  letter-spacing: .12em;
+  color: var(--fraco);
+  font-weight: 700;
+}
+
+.chips-peso { display: flex; gap: .35rem; }
+
+.chip-peso {
+  background: rgba(255, 255, 255, .06);
+  border: 1px solid var(--borda-forte);
+  color: var(--fraco);
+  padding: .4rem .7rem;
+  border-radius: 10px;
+  font-size: .85rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.chip-peso.ativo {
+  background: rgba(251, 191, 36, .18);
+  border-color: rgba(251, 191, 36, .5);
+  color: #fcd34d;
+}
+
+#explicaPeso { font-size: .72rem; color: var(--fraco); }
+
+.atalhos-ativ { display: flex; gap: .5rem; margin-top: .7rem; }
+.atalhos-ativ .menor { padding: .45rem .35rem; }
+
+.lista-ativ {
+  margin-top: .6rem;
+  flex: 1 1 auto;
+  min-height: 6rem;
+  max-height: 42vh;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  border: 1px solid var(--borda);
+  border-radius: 14px;
+}
+
+.ativ-linha {
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+  padding: .35rem .5rem .35rem .7rem;
+  border-bottom: 1px solid var(--borda);
+}
+
+.ativ-linha:last-child { border-bottom: 0; }
+.ativ-linha.marcado { background: rgba(255, 255, 255, .035); }
+
+.ativ-nome {
+  flex: 1;
+  min-width: 0;
+  background: none;
+  border: 0;
+  border-radius: 0;
+  padding: .35rem 0;
+  text-align: left;
+  font-size: .9rem;
+  font-weight: 500;
+  color: var(--texto);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ativ-botoes { display: flex; gap: .25rem; flex: 0 0 auto; }
+
+.ativ-op {
+  width: 2.05rem;
+  height: 2.05rem;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border-radius: 9px;
+  background: rgba(255, 255, 255, .05);
+  border: 1px solid var(--borda);
+  color: var(--fraco);
+  font-size: .95rem;
+  line-height: 1;
+}
+
+/* marcado à mão: cor cheia. previsto (ninguém tocou): só um contorno tracejado */
+.ativ-op.ativo.certo   { background: rgba(52, 211, 153, .22); border-color: rgba(52, 211, 153, .6); color: var(--verde); }
+.ativ-op.ativo.errou   { background: rgba(251, 191, 36, .2);  border-color: rgba(251, 191, 36, .55); color: var(--ambar); }
+.ativ-op.ativo.recusou { background: rgba(251, 113, 133, .18); border-color: rgba(251, 113, 133, .5); color: var(--vermelho); }
+.ativ-op.ativo.faltou  { background: rgba(148, 163, 184, .18); border-color: rgba(148, 163, 184, .5); color: #cbd5e1; }
+
+.ativ-op.previsto { border-style: dashed; border-color: rgba(251, 113, 133, .4); color: rgba(251, 113, 133, .7); }
+
+.resumo-ativ {
+  margin: .6rem 0 0;
+  font-size: .78rem;
+  color: var(--fraco);
+  text-align: center;
+  min-height: 1.1rem;
+}
+
 /* ---------- rodapé ---------- */
 
 .rodape {
