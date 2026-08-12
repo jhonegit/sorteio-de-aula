@@ -12,6 +12,10 @@ Funciona no celular, instalado como aplicativo, e abre sem internet.
 - Dá para chamar alguém fora do sorteio, para quem se oferece. A busca acha o
   nome pelo som: "cami" encontra "Kamila". Quem é chamado assim conta como se
   tivesse caído no sorteio e só volta a ser sorteável na rodada seguinte.
+- Quem se oferece ganha o selo 🔥 com a contagem, na lista de notas e no
+  projetor. É só reconhecimento: a nota não muda por causa dele. Serve para o
+  aluno que participa muito ser visto, já que a média não distingue quem
+  acertou 5 de quem acertou 15.
 - Sorteou sem querer? Com o nome na tela ainda dá para cancelar, ou trocar
   direto por quem se ofereceu. Nada é registrado e ninguém gasta a vez, porque o
   aluno só entra na lista de "já caíram" quando um resultado é registrado.
@@ -30,6 +34,11 @@ Funciona no celular, instalado como aplicativo, e abre sem internet.
   for marcado entra como "não fez": vale zero, mas fica registrado que teve a
   chance. A atividade pode valer ×1, ×2 ou ×3, cai na mesma nota do sorteio e
   não gasta a vez de ninguém na rodada. O lançamento inteiro pode ser desfeito.
+- Modo projetor: o 📽 na tela de Notas põe a lista em tela cheia, com letra
+  grande, legenda dos símbolos e as duas ordens (ranking ou A a Z). Por padrão
+  só aparece quem está acima de 6, e o corte muda ali na hora (todos, 5+, 6+,
+  7+, 8+), então ninguém é exposto no telão. O tamanho da letra tem − A + e
+  fica guardado. Não altera nada: só mostra.
 - Quanto vale cada resultado é ajustável dentro do app, em Ajustes. Os mesmos
   valores servem para as atividades: fez vale o de "respondeu certo", fez em
   parte o de "errou", não fez o de "se recusou".

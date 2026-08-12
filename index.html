@@ -95,6 +95,7 @@
   <section id="tela-notas" class="tela">
     <div class="cabecalho-tela">
       <h1>Notas</h1>
+      <button id="btnProjetar" class="btn-projetar" type="button" aria-label="Mostrar para a turma no projetor">📽</button>
       <select id="ordenarNotas" aria-label="Ordenar lista">
         <option value="nome">A a Z</option>
         <option value="maior">Maior nota</option>
@@ -104,7 +105,7 @@
     </div>
     <div id="placarTurma" class="placar"></div>
     <div id="listaNotas" class="lista-notas"></div>
-    <p class="ajuda">A nota é a média dos pontos do aluno multiplicada por 10. Conta tudo: sorteio, quem se ofereceu e atividade. O que tem peso extra (⚡) pesa por dois ou três na média. Toque num nome para ver ou corrigir o histórico dele.</p>
+    <p class="ajuda">Toque no 📽 lá em cima para mostrar a lista no projetor, com letra grande e legenda. A nota é a média dos pontos do aluno multiplicada por 10. Conta tudo: sorteio, quem se ofereceu e atividade. O que tem peso extra (⚡) pesa por dois ou três na média. O 🔥 mostra quantas vezes o aluno se ofereceu por vontade própria, e não altera a nota. Toque num nome para ver ou corrigir o histórico dele.</p>
   </section>
 
   <!-- ============ TURMA ============ -->
@@ -190,6 +191,40 @@
   </section>
 
 </main>
+
+<!-- ============ PROJETOR ============ -->
+<div id="projetor" class="projetor oculto" role="dialog" aria-label="Notas para mostrar à turma">
+
+  <header class="proj-topo">
+    <h2 id="projTitulo">Turma</h2>
+    <div class="proj-controles">
+      <div class="proj-grupo" id="projOrdens">
+        <button class="proj-chip ativo" data-ordem="ranking" type="button">🏆 Ranking</button>
+        <button class="proj-chip" data-ordem="alfa" type="button">A a Z</button>
+      </div>
+      <div class="proj-grupo" id="projCortes">
+        <button class="proj-chip" data-corte="0" type="button">todos</button>
+        <button class="proj-chip" data-corte="5" type="button">5+</button>
+        <button class="proj-chip ativo" data-corte="6" type="button">6+</button>
+        <button class="proj-chip" data-corte="7" type="button">7+</button>
+        <button class="proj-chip" data-corte="8" type="button">8+</button>
+      </div>
+    </div>
+  </header>
+
+  <div id="projPlacar" class="proj-placar"></div>
+  <div id="projLista" class="proj-lista"></div>
+
+  <footer class="proj-rodape">
+    <div id="projLegenda" class="proj-legenda"></div>
+    <div class="proj-acoes">
+      <button id="projMenor" class="proj-chip" type="button" aria-label="Letra menor">A−</button>
+      <button id="projMaior" class="proj-chip" type="button" aria-label="Letra maior">A+</button>
+      <button id="projSair" class="proj-sair" type="button">Sair</button>
+    </div>
+  </footer>
+
+</div>
 
 <nav class="rodape">
   <button data-ir="sortear" class="ativo" type="button"><span class="ico">◎</span>Sortear</button>

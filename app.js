@@ -40,6 +40,7 @@ var segurando = null;    // botão de resultado que está sendo segurado agora
 var travado = false;     // segura o app durante o estouro do dobro
 
 var MULT_MAX = 3;        // peso máximo que uma oportunidade pode valer
+var ofereceu = false;    // o nome que está no palco se ofereceu, não foi sorteado
 
 /* ---------- atalhos ---------- */
 
@@ -211,6 +212,7 @@ function estruturaVazia() {
     turmaAtiva: null,
     pesos: Object.assign({}, PESOS_PADRAO),
     efeitos: true,
+    zoom: 1,               // tamanho da letra no projetor
     turmas: [],
     registros: [],
     rodadas: {},
@@ -247,6 +249,7 @@ function carregar() {
     if (typeof dados.pesos[k] !== 'number' || isNaN(dados.pesos[k])) dados.pesos[k] = PESOS_PADRAO[k];
   });
   if (typeof dados.efeitos !== 'boolean') dados.efeitos = true;
+  if (typeof dados.zoom !== 'number' || isNaN(dados.zoom)) dados.zoom = 1;
 
   if (!dados.turmas.length) {
     dados.turmas.push({ id: novoId(), nome: 'Turma 1', alunos: [] });
@@ -319,7 +322,7 @@ function estatisticas(turma) {
   var regs = dados.registros.filter(function (r) { return r.turmaId === turma.id; });
   return turma.alunos.map(function (a) {
     var meus = regs.filter(function (r) { return r.alunoId === a.id; });
-    var soma = 0, divisor = 0, dobros = 0;
+    var soma = 0, divisor = 0, dobros = 0, ofertas = 0;
 
     meus.forEach(function (r) {
       var m = multiploDe(r);
@@ -327,12 +330,14 @@ function estatisticas(turma) {
       soma += (typeof p === 'number' ? p : 0) * m;
       divisor += m;                       // a pergunta em dobro pesa por duas
       if (m > 1) dobros++;
+      if (r.ofereceu) ofertas++;           // quantas vezes ele levantou a mão
     });
 
     return {
       aluno: a,
       vezes: meus.length,
       dobros: dobros,
+      ofertas: ofertas,
       soma: soma,
       nota: divisor ? (soma / divisor) * 10 : null,
       registros: meus
@@ -720,6 +725,7 @@ function estourarDobro() {
 
 function sortear() {
   if (girando) return;
+  ofereceu = false;               // este nome saiu no sorteio, não foi voluntário
   var t = turmaAtual();
 
   if (!t.alunos.length) {
@@ -813,6 +819,7 @@ function chamarVoluntario(alunoId) {
   fecharJanela($('#dlgVoluntario'));
 
   sorteado = aluno.id;
+  ofereceu = true;                 // fica registrado que a mão foi dele
   var palco = $('#palco');
   var nome = $('#palcoNome');
   palco.classList.remove('girando');
@@ -836,6 +843,7 @@ function cancelarSorteio(chamarOutro) {
   if (girando || travado || !sorteado) return;
   soltarSegurar();
   sorteado = null;
+  ofereceu = false;
 
   repouso(chamarOutro ? 'Quem se ofereceu?' : 'Sorteio cancelado',
           chamarOutro ? 'escolha o nome na lista' : 'ninguém foi registrado, ninguém gastou a vez');
@@ -920,6 +928,7 @@ function registrar(resultado, dobro) {
     data: new Date().toISOString()
   };
   if (dobro) reg.mult = 2;   // só grava quando é dobro; o normal fica sem campo
+  if (ofereceu) reg.ofereceu = true;
   dados.registros.push(reg);
 
   // quem se ofereceu pode já ter caído nesta rodada; guardo isso para o desfazer
@@ -934,6 +943,7 @@ function registrar(resultado, dobro) {
   salvar();
 
   sorteado = null;
+  ofereceu = false;
   $('#palco').classList.remove('revelado');
   $('#palcoNome').textContent = aluno.nome;
   $('#palcoDica').textContent = '✓ ' + ROTULOS[resultado] + ' · ' +
@@ -1075,6 +1085,12 @@ function renderNotas() {
       pills.appendChild(pi);
     });
 
+    if (l.ofertas) {
+      var po = cria('i', 'oferta', '🔥 ' + l.ofertas);
+      po.title = l.ofertas === 1 ? 'Se ofereceu 1 vez' : 'Se ofereceu ' + l.ofertas + ' vezes';
+      pills.appendChild(po);
+    }
+
     if (l.dobros) {
       var pd = cria('i', 'dobro', '⚡ ' + l.dobros);
       pd.title = l.dobros === 1 ? '1 pergunta desafiadora' : l.dobros + ' perguntas desafiadoras';
@@ -1144,9 +1160,13 @@ function abrirAluno(alunoId) {
 
   var deAtividade = stat.registros.filter(function (r) { return r.atividade; }).length;
 
+  var extras = [];
+  if (deAtividade) extras.push(deAtividade + ' de atividade');
+  if (stat.ofertas) extras.push('🔥 ' + stat.ofertas + ' por vontade própria');
+
   $('#dlgAlunoResumo').textContent = stat.vezes
     ? 'Nota ' + num(stat.nota) + ' · ' + stat.vezes + ' oportunidades' +
-      (deAtividade ? ' (' + deAtividade + ' de atividade)' : '') + ' · ' + partes.join(', ')
+      (extras.length ? ' (' + extras.join(', ') + ')' : '') + ' · ' + partes.join(', ')
     : 'Ainda não teve nenhuma oportunidade.';
 
   var hist = $('#dlgAlunoHistorico');
@@ -1158,11 +1178,14 @@ function abrirAluno(alunoId) {
     .forEach(function (r) {
       var linha = cria('div', 'item-hist');
 
-      // veio de uma atividade? o nome dela aparece por cima, ocupando a linha
+      // de onde veio esta oportunidade: atividade ou mão levantada
       if (r.atividade) {
         var tag = cria('span', 'tag-ativ', '📋 ' + r.atividade);
         tag.title = 'Atividade: ' + r.atividade;
         linha.appendChild(tag);
+      } else if (r.ofereceu) {
+        var tagO = cria('span', 'tag-ativ oferta', '🔥 se ofereceu');
+        linha.appendChild(tagO);
       }
 
       linha.appendChild(cria('span', 'data', dataCurta(r.data)));
@@ -1215,6 +1238,189 @@ function abrirAluno(alunoId) {
     });
 
   abrirJanela($('#dlgAluno'));
+}
+
+/* ---------- projetor ---------- */
+
+/* A mesma lista de notas, em tela cheia e letra grande, para mostrar à turma.
+   Só lê o que já existe: não grava, não muda nota, não gasta vez de ninguém. */
+
+var projAberto = false;
+var projOrdem = 'ranking';
+var projCorte = 6;          // só aparece quem está acima disso
+var projLuz = null;         // pedido para a tela do aparelho não apagar
+
+var LEGENDA = [
+  ['certo', '✓', 'respondeu certo'],
+  ['errou', '≈', 'respondeu, mas errou'],
+  ['naosabe', '?', 'disse que não sabe'],
+  ['recusou', '✕', 'se recusou'],
+  ['oferta', '🔥', 'se ofereceu para responder'],
+  ['dobro', '⚡', 'valeu peso extra'],
+  ['ativ', '📋', 'veio de atividade']
+];
+
+function abrirProjetor() {
+  projAberto = true;
+  $('#projetor').classList.remove('oculto');
+  document.body.classList.add('projetando');
+  renderProjetor();
+
+  // tela cheia de verdade, quando o navegador deixa
+  var raiz = document.documentElement;
+  try {
+    if (raiz.requestFullscreen) raiz.requestFullscreen();
+    else if (raiz.webkitRequestFullscreen) raiz.webkitRequestFullscreen();
+  } catch (e) {}
+
+  // e a tela do aparelho não apaga no meio da explicação
+  if (navigator.wakeLock && navigator.wakeLock.request) {
+    try {
+      navigator.wakeLock.request('screen').then(function (l) { projLuz = l; }, function () {});
+    } catch (e) {}
+  }
+}
+
+function fecharProjetor() {
+  projAberto = false;
+  $('#projetor').classList.add('oculto');
+  document.body.classList.remove('projetando');
+
+  try {
+    if (document.fullscreenElement && document.exitFullscreen) document.exitFullscreen();
+    else if (document.webkitFullscreenElement && document.webkitExitFullscreen) document.webkitExitFullscreen();
+  } catch (e) {}
+
+  if (projLuz) { try { projLuz.release(); } catch (e) {} projLuz = null; }
+}
+
+function mudarZoom(passo) {
+  var z = Math.round((dados.zoom + passo) * 10) / 10;
+  dados.zoom = Math.min(2.2, Math.max(0.7, z));
+  salvar();
+  $('#projetor').style.setProperty('--zoom', dados.zoom);
+}
+
+function renderProjetor() {
+  var t = turmaAtual();
+  var todas = estatisticas(t);
+
+  $('#projTitulo').textContent = t.nome;
+  $('#projetor').style.setProperty('--zoom', dados.zoom);
+  $('#projetor').classList.toggle('sem-efeitos', !dados.efeitos);
+
+  $$('#projOrdens .proj-chip').forEach(function (b) {
+    b.classList.toggle('ativo', b.dataset.ordem === projOrdem);
+  });
+  $$('#projCortes .proj-chip').forEach(function (b) {
+    b.classList.toggle('ativo', Number(b.dataset.corte) === projCorte);
+  });
+
+  // o placar é sempre da turma inteira, não só de quem está na tela
+  var comNota = todas.filter(function (l) { return l.nota !== null; });
+  var media = comNota.length
+    ? comNota.reduce(function (s, l) { return s + l.nota; }, 0) / comNota.length
+    : null;
+  var participacoes = todas.reduce(function (s, l) { return s + l.vezes; }, 0);
+
+  var placar = $('#projPlacar');
+  placar.textContent = '';
+  [[media === null ? '—' : num(media), 'média da turma'],
+   [String(participacoes), 'participações']].forEach(function (par) {
+    var d = cria('div', 'proj-num');
+    d.appendChild(cria('b', null, par[0]));
+    d.appendChild(cria('span', null, par[1]));
+    placar.appendChild(d);
+  });
+
+  // as medalhas são das três maiores da turma, mesmo na ordem alfabética
+  var premiados = comNota.slice()
+    .sort(function (a, b) { return b.nota - a.nota; })
+    .slice(0, 3)
+    .map(function (l) { return l.aluno.id; });
+  var MEDALHAS = ['🥇', '🥈', '🥉'];
+
+  var lista = todas.filter(function (l) {
+    if (!projCorte) return true;                 // "todos" mostra até quem não tem nota
+    return l.nota !== null && l.nota >= projCorte;
+  });
+
+  lista.sort(function (a, b) {
+    if (projOrdem === 'alfa') return a.aluno.nome.localeCompare(b.aluno.nome, 'pt-BR');
+    if (a.nota === null && b.nota === null) return a.aluno.nome.localeCompare(b.aluno.nome, 'pt-BR');
+    if (a.nota === null) return 1;
+    if (b.nota === null) return -1;
+    return b.nota - a.nota;
+  });
+
+  var caixa = $('#projLista');
+  caixa.textContent = '';
+
+  if (!lista.length) {
+    caixa.appendChild(cria('p', 'proj-vazio', projCorte
+      ? 'Ninguém chegou a ' + num(projCorte) + ' ainda. Toque em "todos" para ver a lista inteira.'
+      : 'Nenhum aluno cadastrado nesta turma.'));
+  }
+
+  // com muita gente e tela larga, a lista vira duas colunas de verdade:
+  // a primeira metade à esquerda, a segunda à direita, cada nome embaixo do outro
+  var duas = lista.length > 12 && window.innerWidth >= 900;
+  var esquerda = cria('div', 'proj-coluna');
+  var direita = duas ? cria('div', 'proj-coluna') : null;
+  var corte = duas ? Math.ceil(lista.length / 2) : lista.length;
+  caixa.appendChild(esquerda);
+  if (direita) caixa.appendChild(direita);
+
+  lista.forEach(function (l, i) {
+    var linha = cria('div', 'proj-linha');
+    if (dados.efeitos) linha.style.setProperty('--i', i);
+
+    // a colocação aparece sempre; as três maiores ganham a medalha ao lado dela.
+    // atenção: nada de classe "medalha" aqui, que é de outra tela e sai do lugar
+    var lugar = premiados.indexOf(l.aluno.id);
+    var pos = cria('span', 'proj-pos' + (lugar !== -1 ? ' m' + (lugar + 1) : ''));
+    if (projOrdem === 'ranking') pos.appendChild(cria('b', null, (i + 1) + 'º'));
+    if (lugar !== -1) pos.appendChild(cria('span', 'med', MEDALHAS[lugar]));
+    else if (projOrdem !== 'ranking') pos.appendChild(cria('b', null, '·'));
+    linha.appendChild(pos);
+
+    // o nome fica sozinho na primeira fileira, para caber inteiro;
+    // os símbolos vão embaixo dele, onde há espaço de sobra
+    var corpo = cria('div', 'proj-corpo');
+    corpo.appendChild(cria('span', 'proj-nome', l.aluno.nome));
+
+    var contagem = { certo: 0, errou: 0, naoSabe: 0, recusou: 0 };
+    var deAtividade = 0;
+    l.registros.forEach(function (r) {
+      if (contagem[r.resultado] !== undefined) contagem[r.resultado]++;
+      if (r.atividade) deAtividade++;
+    });
+
+    var marcas = cria('span', 'proj-marcas');
+    Object.keys(contagem).forEach(function (k) {
+      if (!contagem[k]) return;
+      marcas.appendChild(cria('i', k === 'naoSabe' ? 'naosabe' : k, GLIFOS[k] + ' ' + contagem[k]));
+    });
+    if (l.ofertas) marcas.appendChild(cria('i', 'oferta', '🔥 ' + l.ofertas));
+    if (l.dobros) marcas.appendChild(cria('i', 'dobro', '⚡ ' + l.dobros));
+    if (deAtividade) marcas.appendChild(cria('i', 'ativ', '📋 ' + deAtividade));
+    corpo.appendChild(marcas);
+    linha.appendChild(corpo);
+
+    linha.appendChild(cria('span', 'proj-nota ' + faixaNota(l.nota),
+      l.nota === null ? '—' : num(l.nota)));
+
+    (i < corte ? esquerda : direita).appendChild(linha);
+  });
+
+  var leg = $('#projLegenda');
+  leg.textContent = '';
+  LEGENDA.forEach(function (item) {
+    var d = cria('span', 'leg-item');
+    d.appendChild(cria('i', item[0], item[1]));
+    d.appendChild(cria('span', null, item[2]));
+    leg.appendChild(d);
+  });
 }
 
 /* ---------- tela de turmas ---------- */
@@ -1511,8 +1717,9 @@ function exportarBackup() {
 
 function exportarNotas() {
   var t = turmaAtual();
-  var linhas = [['Aluno', 'Oportunidades', 'Sendo de atividade', 'Certo', 'Errou',
-                 'Nao sabe', 'Recusou', 'Com peso extra', 'Pontos', 'Nota (0 a 10)']];
+  var linhas = [['Aluno', 'Oportunidades', 'Se ofereceu', 'Sendo de atividade',
+                 'Certo', 'Errou', 'Nao sabe', 'Recusou', 'Com peso extra',
+                 'Pontos', 'Nota (0 a 10)']];
 
   estatisticas(t)
     .sort(function (a, b) { return a.aluno.nome.localeCompare(b.aluno.nome, 'pt-BR'); })
@@ -1524,7 +1731,8 @@ function exportarNotas() {
         if (r.atividade) deAtividade++;
       });
       linhas.push([
-        s.aluno.nome, s.vezes, deAtividade, c.certo, c.errou, c.naoSabe, c.recusou,
+        s.aluno.nome, s.vezes, s.ofertas, deAtividade,
+        c.certo, c.errou, c.naoSabe, c.recusou,
         s.dobros, num(s.soma), s.nota === null ? '' : num(s.nota)
       ]);
     });
@@ -1548,7 +1756,7 @@ function exportarRegistros() {
         isNaN(d) ? '' : d.toLocaleDateString('pt-BR'),
         isNaN(d) ? '' : d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
         aluno ? aluno.nome : '(aluno removido)',
-        r.atividade ? r.atividade : 'Sorteio',
+        r.atividade ? r.atividade : (r.ofereceu ? 'Se ofereceu' : 'Sorteio'),
         rotulo(r.resultado, r.atividade),
         'x' + m,
         num((dados.pesos[r.resultado] || 0) * m)
@@ -1594,6 +1802,7 @@ function carregarConserto() {
     if (typeof dados.pesos[k] !== 'number' || isNaN(dados.pesos[k])) dados.pesos[k] = PESOS_PADRAO[k];
   });
   if (typeof dados.efeitos !== 'boolean') dados.efeitos = true;
+  if (typeof dados.zoom !== 'number' || isNaN(dados.zoom)) dados.zoom = 1;
   if (!dados.turmas.length) dados.turmas.push({ id: novoId(), nome: 'Turma 1', alunos: [] });
   if (!turmaAtual()) dados.turmaAtiva = dados.turmas[0].id;
   ultimaAcao = null;
@@ -1683,6 +1892,27 @@ function ligarEventos() {
   });
 
   $('#btnFecharAluno').addEventListener('click', function () { fecharJanela($('#dlgAluno')); });
+
+  /* projetor */
+
+  $('#btnProjetar').addEventListener('click', abrirProjetor);
+  $('#projSair').addEventListener('click', fecharProjetor);
+  $('#projMenor').addEventListener('click', function () { mudarZoom(-0.1); });
+  $('#projMaior').addEventListener('click', function () { mudarZoom(0.1); });
+
+  $$('#projOrdens .proj-chip').forEach(function (b) {
+    b.addEventListener('click', function () { projOrdem = b.dataset.ordem; renderProjetor(); });
+  });
+  $$('#projCortes .proj-chip').forEach(function (b) {
+    b.addEventListener('click', function () { projCorte = Number(b.dataset.corte); renderProjetor(); });
+  });
+
+  document.addEventListener('keydown', function (e) {
+    if (projAberto && e.key === 'Escape') fecharProjetor();
+  });
+
+  // girar o aparelho ou ligar no projetor muda a largura: refaz as colunas
+  window.addEventListener('resize', function () { if (projAberto) renderProjetor(); });
 
   /* atividades */
 
