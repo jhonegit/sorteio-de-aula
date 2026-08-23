@@ -1020,6 +1020,109 @@ dialog textarea { margin-top: .6rem; resize: vertical; font-size: .95rem; }
   min-height: 1.1rem;
 }
 
+/* ---------- pergunta para o grupo ---------- */
+
+/* dourado, para não ser confundido com o sortear nem com o chamar voluntário */
+.btn-grupo {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: .45rem;
+  width: 100%;
+  padding: .75rem 1rem;
+  font-size: .92rem;
+  font-weight: 600;
+  color: #fcd34d;
+  background: rgba(251, 191, 36, .07);
+  border-color: rgba(251, 191, 36, .35);
+}
+
+/* a janela vira uma coluna: só a lista de nomes rola, o resto fica fixo */
+#dlgGrupo[open] { display: flex; flex-direction: column; }
+#dlgGrupo[open] > *:not(.lista-grupo) { flex: 0 0 auto; }
+
+.lista-grupo {
+  margin-top: .6rem;
+  flex: 1 1 auto;
+  min-height: 4.5rem;
+  max-height: 44vh;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  border: 1px solid var(--borda);
+  border-radius: 14px;
+}
+
+/* nome em cima, letras embaixo ocupando a largura toda: no celular estreito o
+   nome não some e os botões ficam grandes o bastante para marcar com o dedo */
+.grupo-linha {
+  padding: .45rem .55rem .55rem;
+  border-bottom: 1px solid var(--borda);
+}
+
+.grupo-linha:last-child { border-bottom: 0; }
+.grupo-linha.marcado { background: rgba(255, 255, 255, .035); }
+
+.grupo-cabeca { display: flex; align-items: center; gap: .45rem; margin-bottom: .35rem; }
+
+.grupo-linha .avatar { width: 1.7rem; height: 1.7rem; border-radius: 9px; font-size: .58rem; flex: 0 0 auto; }
+
+.grupo-nome {
+  flex: 1;
+  min-width: 0;
+  font-size: .88rem;
+  font-weight: 550;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.grupo-linha .alts { display: grid; grid-template-columns: repeat(5, 1fr); gap: .3rem; }
+
+.linha-gabarito .alts { display: flex; gap: .28rem; flex: 0 0 auto; }
+
+.alt-op {
+  min-width: 1.9rem;
+  height: 2.1rem;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border-radius: 9px;
+  background: rgba(255, 255, 255, .05);
+  border: 1px solid var(--borda);
+  color: var(--fraco);
+  font-size: .85rem;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.linha-gabarito .alt-op { width: 2.1rem; }
+
+/* a letra que o aluno marcou. sem gabarito ainda, fica roxa (só marcada);
+   com o gabarito na tela, ela mesma se pinta de verde ou de âmbar */
+.alt-op.marcada { background: rgba(124, 92, 255, .2); border-color: rgba(124, 92, 255, .6); color: #c4b5fd; }
+.alt-op.marcada.certa  { background: rgba(52, 211, 153, .22); border-color: rgba(52, 211, 153, .6); color: var(--verde); }
+.alt-op.marcada.errada { background: rgba(251, 191, 36, .2); border-color: rgba(251, 191, 36, .55); color: var(--ambar); }
+
+.linha-gabarito {
+  display: flex;
+  align-items: center;
+  gap: .6rem;
+  flex-wrap: wrap;
+  margin-top: .7rem;
+  padding: .5rem .6rem;
+  border: 1px solid var(--borda);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, .03);
+}
+
+.alt-op.gab.certa {
+  background: rgba(52, 211, 153, .22);
+  border-color: rgba(52, 211, 153, .65);
+  color: var(--verde);
+}
+
+.item-hist .tag-ativ.grupo { color: #c4b5fd; }
+
 /* ---------- projetor ---------- */
 
 /* com o botão do projetor no meio, o título empurra os dois para a direita */

@@ -994,10 +994,17 @@ function atualizarDesfazer() {
   var caixa = $('#desfazer');
   if (!ultimaAcao) { caixa.classList.add('oculto'); return; }
   caixa.classList.remove('oculto');
-  $('#desfazerTexto').textContent = ultimaAcao.tipo === 'falta'
-    ? ultimaAcao.nome + ': falta'
-    : ultimaAcao.nome + ': ' + (ROTULOS[ultimaAcao.resultado] || 'registrado') +
-      (ultimaAcao.dobro ? ' ⚡' : '');
+  var texto;
+  if (ultimaAcao.tipo === 'falta') {
+    texto = ultimaAcao.nome + ': falta';
+  } else if (ultimaAcao.tipo === 'grupo') {
+    texto = 'Grupo de ' + ultimaAcao.total + ' (resposta ' + ultimaAcao.gabarito + '): ' +
+            ultimaAcao.acertos + (ultimaAcao.acertos === 1 ? ' acertou' : ' acertaram');
+  } else {
+    texto = ultimaAcao.nome + ': ' + (ROTULOS[ultimaAcao.resultado] || 'registrado') +
+            (ultimaAcao.dobro ? ' ⚡' : '');
+  }
+  $('#desfazerTexto').textContent = texto;
 }
 
 function desfazer() {
@@ -1013,6 +1020,13 @@ function desfazer() {
       var pos = r.indexOf(a.alunoId);
       if (pos !== -1) r.splice(pos, 1);
     }
+  } else if (a.tipo === 'grupo') {
+    dados.registros = dados.registros.filter(function (r) { return r.lote !== a.lote; });
+    var naRodada = rodada(a.turmaId);
+    (a.novos || []).forEach(function (id) {
+      var pos = naRodada.indexOf(id);
+      if (pos !== -1) naRodada.splice(pos, 1);
+    });
   } else if (a.tipo === 'falta') {
     var lista = ausentes(a.turmaId);
     var i = lista.indexOf(a.alunoId);
@@ -1183,6 +1197,11 @@ function abrirAluno(alunoId) {
         var tag = cria('span', 'tag-ativ', '📋 ' + r.atividade);
         tag.title = 'Atividade: ' + r.atividade;
         linha.appendChild(tag);
+      } else if (r.gabarito) {
+        var tagG = cria('span', 'tag-ativ grupo',
+          '🎯 marcou ' + (r.alt || '—') + ' · certa ' + r.gabarito);
+        tagG.title = 'Pergunta para o grupo';
+        linha.appendChild(tagG);
       } else if (r.ofereceu) {
         var tagO = cria('span', 'tag-ativ oferta', '🔥 se ofereceu');
         linha.appendChild(tagO);
@@ -1673,6 +1692,229 @@ function renderDesfazerAtividade() {
     ultimoLote.quantos + (ultimoLote.quantos === 1 ? ' aluno' : ' alunos');
 }
 
+/* ---------- pergunta para o grupo ---------- */
+
+/* Uma pergunta de A a E para vários alunos ao mesmo tempo. O app sorteia o
+   grupo, você marca a letra que cada um respondeu, marca a resposta certa e
+   lança tudo de uma vez: quem bateu leva "respondeu certo", o resto leva
+   "respondeu, mas errou". Quem ficar sem letra entra como quem errou, porque
+   a vez dele foi gasta do mesmo jeito. */
+
+var ALTS = ['A', 'B', 'C', 'D', 'E'];
+
+var grupoIds = [];         // alunos sorteados, na ordem em que saíram
+var grupoAlt = {};         // alunoId -> letra que ele marcou
+var grupoGabarito = null;  // a resposta certa
+var grupoQtd = 5;          // quantos sortear de uma vez
+var multGrupo = 1;         // peso desta pergunta
+
+function abrirGrupo() {
+  var t = turmaAtual();
+  if (!t.alunos.length) {
+    alert('Cadastre os alunos desta turma antes de sortear um grupo.');
+    return;
+  }
+  multGrupo = 1;
+  if (!sortearGrupo()) return;
+  abrirJanela($('#dlgGrupo'));
+}
+
+// pega quantos couberem sem repetir ninguém na rodada. se a rodada acabar no
+// meio do grupo, ela recomeça ali mesmo e o resto sai da lista nova
+function sortearGrupo() {
+  var t = turmaAtual();
+  var faltaram = ausentes(t.id);
+  var possiveis = t.alunos.filter(function (a) { return faltaram.indexOf(a.id) === -1; });
+
+  grupoIds = [];
+  grupoAlt = {};
+  grupoGabarito = null;
+
+  if (!possiveis.length) {
+    alert('Ninguém disponível: todos estão marcados como falta hoje.');
+    return false;
+  }
+
+  var pool = disponiveis(t).slice();
+  var recomecou = false;
+
+  while (grupoIds.length < grupoQtd) {
+    if (!pool.length) {
+      if (recomecou) break;                 // a turma é menor que o grupo pedido
+      recomecou = true;
+      dados.rodadas[t.id] = [];             // todo mundo já passou: rodada nova
+      pool = possiveis.filter(function (a) { return grupoIds.indexOf(a.id) === -1; });
+      if (!pool.length) break;
+    }
+    var i = aleatorio(pool.length);
+    grupoIds.push(pool[i].id);
+    pool.splice(i, 1);
+  }
+
+  if (recomecou) salvar();
+  vibrar(12);
+  renderGrupo();
+  return true;
+}
+
+function contarGrupo() {
+  var acertos = 0, semLetra = 0;
+  grupoIds.forEach(function (id) {
+    if (!grupoAlt[id]) semLetra++;
+    if (grupoGabarito && grupoAlt[id] === grupoGabarito) acertos++;
+  });
+  return { total: grupoIds.length, acertos: acertos,
+           erros: grupoIds.length - acertos, semLetra: semLetra };
+}
+
+function resumoGrupo() {
+  var c = contarGrupo();
+  if (!c.total) return 'Ninguém sorteado.';
+  if (!grupoGabarito) return 'Marque a resposta certa (A a E) para poder lançar.';
+
+  var partes = [c.acertos + (c.acertos === 1 ? ' acertou' : ' acertaram')];
+  if (c.erros) partes.push(c.erros === 1 ? '1 tentou, mas errou' : c.erros + ' tentaram, mas erraram');
+  if (c.semLetra) partes.push(c.semLetra === 1 ? '1 sem letra marcada' : c.semLetra + ' sem letra marcada');
+  return partes.join(' · ');
+}
+
+function renderGrupo() {
+  var t = turmaAtual();
+
+  $$('#qtdGrupo .chip-peso').forEach(function (b) {
+    b.classList.toggle('ativo', Number(b.dataset.qtd) === grupoQtd);
+  });
+  $$('#pesoGrupo .chip-peso').forEach(function (b) {
+    b.classList.toggle('ativo', Number(b.dataset.mult) === multGrupo);
+  });
+  $('#explicaPesoGrupo').textContent = multGrupo === 1
+    ? 'conta como 1 participação'
+    : 'conta como ' + multGrupo + ' participações';
+
+  var gab = $('#gabaritoGrupo');
+  gab.textContent = '';
+  ALTS.forEach(function (letra) {
+    var b = cria('button', 'alt-op gab' + (grupoGabarito === letra ? ' certa' : ''), letra);
+    b.type = 'button';
+    b.addEventListener('click', function () {
+      grupoGabarito = grupoGabarito === letra ? null : letra;
+      renderGrupo();
+    });
+    gab.appendChild(b);
+  });
+
+  var caixa = $('#listaGrupo');
+  caixa.textContent = '';
+
+  grupoIds.forEach(function (id) {
+    var a = alunoPorId(t, id);
+    if (!a) return;
+    var marcada = grupoAlt[id] || null;
+
+    var linha = cria('div', 'grupo-linha' + (marcada ? ' marcado' : ''));
+
+    var cabeca = cria('div', 'grupo-cabeca');
+    var av = cria('span', 'avatar', iniciais(a.nome));
+    pintarAvatar(av, a.nome);
+    cabeca.appendChild(av);
+    cabeca.appendChild(cria('span', 'grupo-nome', a.nome));
+    linha.appendChild(cabeca);
+
+    var botoes = cria('div', 'alts');
+    ALTS.forEach(function (letra) {
+      var classes = 'alt-op';
+      if (marcada === letra) {
+        classes += ' marcada';
+        if (grupoGabarito) classes += (letra === grupoGabarito ? ' certa' : ' errada');
+      }
+      var b = cria('button', classes, letra);
+      b.type = 'button';
+      b.addEventListener('click', function () {
+        if (grupoAlt[id] === letra) delete grupoAlt[id];   // tocar de novo desmarca
+        else grupoAlt[id] = letra;
+        renderGrupo();
+      });
+      botoes.appendChild(b);
+    });
+    linha.appendChild(botoes);
+
+    caixa.appendChild(linha);
+  });
+
+  $('#resumoGrupo').textContent = resumoGrupo();
+}
+
+function lancarGrupo() {
+  var t = turmaAtual();
+  var c = contarGrupo();
+
+  if (!c.total) return;
+  if (!grupoGabarito) {
+    alert('Marque a resposta certa (A a E) antes de lançar.');
+    return;
+  }
+
+  if (!confirm('Lançar esta pergunta com peso ×' + multGrupo + '?\n\n' +
+               'Resposta certa: ' + grupoGabarito + '\n' + resumoGrupo() +
+               '\n\n' + (c.total === 1 ? 'O aluno gasta' : 'Os ' + c.total + ' gastam') +
+               ' a vez na rodada. Quem ficou sem letra vai como "respondeu, mas errou".')) return;
+
+  var lote = novoId();
+  var quando = new Date().toISOString();
+  var novos = [];
+
+  grupoIds.forEach(function (id) {
+    var a = alunoPorId(t, id);
+    if (!a) return;
+    var letra = grupoAlt[id] || '';
+
+    var reg = {
+      id: novoId(),
+      turmaId: t.id,
+      alunoId: id,
+      resultado: letra === grupoGabarito ? 'certo' : 'errou',
+      data: quando,
+      alt: letra,
+      gabarito: grupoGabarito,
+      lote: lote
+    };
+    if (multGrupo > 1) reg.mult = multGrupo;
+    dados.registros.push(reg);
+
+    if (rodada(t.id).indexOf(id) === -1) {
+      rodada(t.id).push(id);
+      novos.push(id);           // só estes voltam pro sorteio se você desfizer
+    }
+  });
+
+  ultimaAcao = {
+    tipo: 'grupo', lote: lote, turmaId: t.id, novos: novos,
+    total: c.total, acertos: c.acertos, gabarito: grupoGabarito
+  };
+  salvar();
+
+  fecharJanela($('#dlgGrupo'));
+
+  sorteado = null;
+  ofereceu = false;
+  $('#palco').classList.remove('revelado');
+  $('#palcoNome').textContent = c.acertos + ' de ' + c.total + ' acertaram';
+  $('#palcoDica').textContent = 'Resposta certa: ' + grupoGabarito +
+    (multGrupo > 1 ? ' · ⚡ ×' + multGrupo : '');
+  $('#acoesResultado').classList.add('oculto');
+  $('#acoesSorteio').classList.remove('oculto');
+  $('#btnSortear').disabled = false;
+
+  comemorar(c.acertos ? 'certo' : 'errou', c.acertos, multGrupo > 1);
+
+  grupoIds = [];
+  grupoAlt = {};
+  grupoGabarito = null;
+
+  renderSortear();
+  renderNotas();
+}
+
 /* ---------- tela de ajustes ---------- */
 
 function renderAjustes() {
@@ -1697,8 +1939,17 @@ function baixar(nomeArquivo, conteudo, tipo) {
   setTimeout(function () { URL.revokeObjectURL(url); }, 3000);
 }
 
+// data e hora no nome: baixar duas vezes no mesmo dia não cobre o arquivo antigo
 function nomeArquivo(prefixo, ext) {
-  return prefixo + '-' + hoje() + '.' + ext;
+  var d = new Date();
+  var dd = function (n) { return (n < 10 ? '0' : '') + n; };
+  return prefixo + '-' + hoje() + '-' + dd(d.getHours()) + 'h' + dd(d.getMinutes()) + '.' + ext;
+}
+
+// o pedaço do nome da turma que entra no arquivo, sem acento e sem espaço
+function apelidoTurma(turma) {
+  var s = normalizar(turma.nome).replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+  return s || 'turma';
 }
 
 // a marca do começo faz o Excel abrir o arquivo com os acentos certos
@@ -1712,7 +1963,10 @@ function csv(linhas) {
 }
 
 function exportarBackup() {
-  baixar(nomeArquivo('sorteio-backup', 'json'), JSON.stringify(dados, null, 2), 'application/json');
+  // o backup é de todas as turmas, mas leva o nome da que está aberta para
+  // você reconhecer o arquivo na pasta de downloads
+  baixar(nomeArquivo('sorteio-backup-' + apelidoTurma(turmaAtual()), 'json'),
+         JSON.stringify(dados, null, 2), 'application/json');
 }
 
 function exportarNotas() {
@@ -1737,13 +1991,13 @@ function exportarNotas() {
       ]);
     });
 
-  baixar(nomeArquivo('notas-' + normalizar(t.nome).replace(/[^a-z0-9]+/g, '-'), 'csv'),
-         csv(linhas), 'text/csv;charset=utf-8');
+  baixar(nomeArquivo('notas-' + apelidoTurma(t), 'csv'), csv(linhas), 'text/csv;charset=utf-8');
 }
 
 function exportarRegistros() {
   var t = turmaAtual();
-  var linhas = [['Data', 'Hora', 'Aluno', 'Origem', 'Resultado', 'Peso', 'Pontos']];
+  var linhas = [['Data', 'Hora', 'Aluno', 'Origem', 'Resultado', 'Marcou',
+                 'Resposta certa', 'Peso', 'Pontos']];
 
   dados.registros
     .filter(function (r) { return r.turmaId === t.id; })
@@ -1756,15 +2010,17 @@ function exportarRegistros() {
         isNaN(d) ? '' : d.toLocaleDateString('pt-BR'),
         isNaN(d) ? '' : d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
         aluno ? aluno.nome : '(aluno removido)',
-        r.atividade ? r.atividade : (r.ofereceu ? 'Se ofereceu' : 'Sorteio'),
+        r.atividade ? r.atividade
+                    : (r.gabarito ? 'Pergunta para o grupo' : (r.ofereceu ? 'Se ofereceu' : 'Sorteio')),
         rotulo(r.resultado, r.atividade),
+        r.alt || '',
+        r.gabarito || '',
         'x' + m,
         num((dados.pesos[r.resultado] || 0) * m)
       ]);
     });
 
-  baixar(nomeArquivo('registros-' + normalizar(t.nome).replace(/[^a-z0-9]+/g, '-'), 'csv'),
-         csv(linhas), 'text/csv;charset=utf-8');
+  baixar(nomeArquivo('registros-' + apelidoTurma(t), 'csv'), csv(linhas), 'text/csv;charset=utf-8');
 }
 
 function importarBackup(arquivo) {
@@ -1868,6 +2124,28 @@ function ligarEventos() {
   $('#btnTrocarVoluntario').addEventListener('click', function () { cancelarSorteio(true); });
 
   $('#btnVoluntario').addEventListener('click', abrirVoluntario);
+
+  /* pergunta para o grupo */
+
+  $('#btnGrupo').addEventListener('click', abrirGrupo);
+  $('#btnGrupoCancelar').addEventListener('click', function () { fecharJanela($('#dlgGrupo')); });
+  $('#btnGrupoLancar').addEventListener('click', lancarGrupo);
+  $('#btnRessortear').addEventListener('click', function () { sortearGrupo(); });
+
+  $$('#qtdGrupo .chip-peso').forEach(function (b) {
+    b.addEventListener('click', function () {
+      grupoQtd = Number(b.dataset.qtd) || 5;
+      sortearGrupo();                 // mudou o tamanho: sorteia o grupo de novo
+    });
+  });
+
+  $$('#pesoGrupo .chip-peso').forEach(function (b) {
+    b.addEventListener('click', function () {
+      multGrupo = Number(b.dataset.mult) || 1;
+      renderGrupo();
+    });
+  });
+
   $('#btnVoluntarioCancelar').addEventListener('click', function () { fecharJanela($('#dlgVoluntario')); });
   $('#buscaVoluntario').addEventListener('input', renderBusca);
 
@@ -1944,6 +2222,7 @@ function ligarEventos() {
     dados.turmaAtiva = e.target.value;
     ultimaAcao = null;
     ultimoLote = null;      // o desfazer da atividade era da turma anterior
+    grupoIds = [];          // o grupo sorteado era da turma anterior
     soltarSegurar();
     salvar();
     repouso('Pronto?', 'Toque no botão para sortear');

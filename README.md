@@ -29,6 +29,13 @@ Funciona no celular, instalado como aplicativo, e abre sem internet.
   resultado, segurar ele por 1 segundo. O botão vai enchendo de dourado, treme,
   estoura em fumaça no fim e aquela resposta conta como duas participações na
   média. Toque rápido segue valendo o normal.
+- Pergunta para o grupo: sorteia até 5 de uma vez para a mesma questão de
+  múltipla escolha. Marque a letra que cada um respondeu, marque a resposta
+  certa e lance tudo junto: quem bateu leva "respondeu certo", o resto leva
+  "respondeu, mas errou". Quem ficar sem letra entra como quem errou, porque
+  gastou a vez do mesmo jeito. A pergunta pode valer ×1, ×2 ou ×3, e o grupo
+  inteiro pode ser desfeito no botão de sempre. Todos gastam a vez na rodada;
+  se ela acabar no meio do grupo, recomeça ali mesmo.
 - Atividade fora do sorteio: em Turmas dá para lançar uma de uma vez para a
   turma inteira, marcando quem fez, quem fez em parte e quem faltou. Quem não
   for marcado entra como "não fez": vale zero, mas fica registrado que teve a
@@ -51,7 +58,16 @@ Tudo é guardado no próprio aparelho. Nenhum nome de aluno está no código e n
 é enviado para a internet.
 
 Em Ajustes há três downloads: o backup completo (para restaurar depois), a
-planilha de notas e a planilha de registros.
+planilha de notas e a planilha de registros. Todo arquivo baixado leva o nome
+da turma, a data e a hora, então um download nunca cobre o outro. O backup é
+sempre de todas as turmas; o nome da turma serve só para achar o arquivo.
+
+Para mostrar na sala sem copiar nada, ligue o próprio celular no projetor
+(adaptador USB-C para HDMI, ou espelhamento na TV) e use o 📽 da tela de Notas.
+Para usar o computador da sala, baixe o backup no celular, mande o arquivo
+para você mesmo e restaure no computador. Restaurar substitui o que estiver
+guardado lá, e os dois aparelhos não se conversam depois: registre sempre no
+mesmo.
 
 Limpar os dados do navegador apaga tudo. Baixar o backup de vez em quando
 resolve.

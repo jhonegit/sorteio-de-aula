@@ -58,6 +58,9 @@
       <button id="btnVoluntario" class="btn-voluntario secundario" type="button">
         <span aria-hidden="true">✋</span>Chamar quem se ofereceu
       </button>
+      <button id="btnGrupo" class="btn-grupo secundario" type="button">
+        <span aria-hidden="true">🎯</span>Pergunta para o grupo
+      </button>
     </div>
 
     <div id="acoesResultado" class="acoes-resultado oculto">
@@ -284,6 +287,46 @@
   <div class="linha-botoes">
     <button id="btnAtividadeCancelar" class="secundario" type="button">Cancelar</button>
     <button id="btnAtividadeLancar" type="button">Lançar</button>
+  </div>
+</dialog>
+
+<dialog id="dlgGrupo">
+  <h2>Pergunta para o grupo</h2>
+  <p class="ajuda">Marque a letra que cada um respondeu e depois a resposta certa. Quem bater com ela ganha o ponto de acerto; o resto ganha o de tentou. Quem ficar sem letra entra como quem errou.</p>
+
+  <div class="linha-peso">
+    <span class="rotulo-peso">Quantos</span>
+    <div id="qtdGrupo" class="chips-peso">
+      <button type="button" class="chip-peso" data-qtd="2">2</button>
+      <button type="button" class="chip-peso" data-qtd="3">3</button>
+      <button type="button" class="chip-peso" data-qtd="4">4</button>
+      <button type="button" class="chip-peso ativo" data-qtd="5">5</button>
+    </div>
+    <button id="btnRessortear" class="menor" type="button">🎲 Sortear de novo</button>
+  </div>
+
+  <div id="listaGrupo" class="lista-grupo"></div>
+
+  <div class="linha-gabarito">
+    <span class="rotulo-peso">Resposta certa</span>
+    <div id="gabaritoGrupo" class="alts"></div>
+  </div>
+
+  <div class="linha-peso">
+    <span class="rotulo-peso">Peso</span>
+    <div id="pesoGrupo" class="chips-peso">
+      <button type="button" class="chip-peso ativo" data-mult="1">×1</button>
+      <button type="button" class="chip-peso" data-mult="2">×2</button>
+      <button type="button" class="chip-peso" data-mult="3">×3</button>
+    </div>
+    <small id="explicaPesoGrupo">conta como 1 participação</small>
+  </div>
+
+  <p id="resumoGrupo" class="resumo-ativ"></p>
+
+  <div class="linha-botoes">
+    <button id="btnGrupoCancelar" class="secundario" type="button">Cancelar</button>
+    <button id="btnGrupoLancar" type="button">Lançar</button>
   </div>
 </dialog>
 
