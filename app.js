@@ -4,6 +4,7 @@
 'use strict';
 
 var CHAVE = 'sorteio-alunos-v1';
+var VERSAO = 'v10';   // aparece em Ajustes; tem que bater com o CACHE do sw.js
 
 var PESOS_PADRAO = { certo: 1, errou: 0.7, naoSabe: 0.4, recusou: 0 };
 
@@ -1919,6 +1920,7 @@ function lancarGrupo() {
 
 function renderAjustes() {
   renderTopo(turmaAtual());
+  $('#versaoApp').textContent = VERSAO;
   Object.keys(PESOS_PADRAO).forEach(function (k) {
     $('#peso-' + k).value = num(dados.pesos[k]);
   });

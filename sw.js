@@ -1,7 +1,7 @@
 /* Guarda o app no aparelho para abrir sem internet.
    Ao mudar qualquer arquivo, troque o número do CACHE (v1 -> v2 -> v3...). */
 
-var CACHE = 'sorteio-v9';
+var CACHE = 'sorteio-v10';
 
 var ARQUIVOS = [
   './',
@@ -14,10 +14,22 @@ var ARQUIVOS = [
   './icons/icon-maskable-512.png'
 ];
 
+/* Ao instalar, cada arquivo é buscado direto da rede ({ cache: 'reload' }).
+   Sem isso o navegador pode entregar de volta a cópia velha que ele mesmo
+   guardou, e o app fica metade novo, metade antigo: a tela nova aparece mas o
+   miolo continua o de antes. Um arquivo que falhe não derruba os outros. */
 self.addEventListener('install', function (evento) {
   evento.waitUntil(
     caches.open(CACHE)
-      .then(function (c) { return c.addAll(ARQUIVOS); })
+      .then(function (c) {
+        return Promise.all(ARQUIVOS.map(function (url) {
+          return fetch(new Request(url, { cache: 'reload' }))
+            .then(function (resposta) {
+              if (resposta && resposta.ok) return c.put(url, resposta);
+            })
+            .catch(function () {});
+        }));
+      })
       .then(function () { return self.skipWaiting(); })
   );
 });
