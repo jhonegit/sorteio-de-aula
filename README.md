@@ -29,6 +29,9 @@ Funciona no celular, instalado como aplicativo, e abre sem internet.
   resultado, segurar ele por 1 segundo. O botão vai enchendo de dourado, treme,
   estoura em fumaça no fim e aquela resposta conta como duas participações na
   média. Toque rápido segue valendo o normal.
+- No ranking, a nota manda: quem tem 10 nunca aparece abaixo de quem tem 9.
+  Entre os que empatam, sobe quem participou mais; empatando de novo, quem
+  mais se ofereceu. É só a ordem da lista: nenhuma nota muda por causa disso.
 - Pergunta para o grupo: sorteia até 5 de uma vez para a mesma questão de
   múltipla escolha. Marque a letra que cada um respondeu, marque a resposta
   certa e lance tudo junto: quem bateu leva "respondeu certo", o resto leva

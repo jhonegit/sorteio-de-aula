@@ -4,7 +4,7 @@
 'use strict';
 
 var CHAVE = 'sorteio-alunos-v1';
-var VERSAO = 'v10';   // aparece em Ajustes; tem que bater com o CACHE do sw.js
+var VERSAO = 'v11';   // aparece em Ajustes; tem que bater com o CACHE do sw.js
 
 var PESOS_PADRAO = { certo: 1, errou: 0.7, naoSabe: 0.4, recusou: 0 };
 
@@ -343,6 +343,23 @@ function estatisticas(turma) {
       nota: divisor ? (soma / divisor) * 10 : null,
       registros: meus
     };
+  });
+}
+
+/* A ordem do ranking, usada na lista de notas e no projetor. A nota manda:
+   quem tem 10 nunca aparece abaixo de quem tem 9. Entre os que empatam, sobe
+   quem participou mais; empatando de novo, quem mais se ofereceu. Isso não
+   muda nota nenhuma, só decide quem aparece primeiro. Quem ainda não tem nota
+   fica no fim das duas ordens. */
+function ordenarPorRanking(lista, doPiorPraMelhor) {
+  return lista.sort(function (a, b) {
+    if (a.nota === null && b.nota === null) return a.aluno.nome.localeCompare(b.aluno.nome, 'pt-BR');
+    if (a.nota === null) return 1;
+    if (b.nota === null) return -1;
+
+    var r = (b.nota - a.nota) || (b.vezes - a.vezes) || (b.ofertas - a.ofertas);
+    if (doPiorPraMelhor) r = -r;
+    return r || a.aluno.nome.localeCompare(b.aluno.nome, 'pt-BR');
   });
 }
 
@@ -1057,21 +1074,21 @@ function renderNotas() {
     return;
   }
 
-  // as três maiores notas ganham medalha, seja qual for a ordem escolhida
-  var premiados = linhas.filter(function (l) { return l.nota !== null; })
-    .sort(function (a, b) { return b.nota - a.nota; })
+  // o pódio é o do ranking, seja qual for a ordem escolhida na tela
+  var premiados = ordenarPorRanking(linhas.filter(function (l) { return l.nota !== null; }))
     .slice(0, 3)
     .map(function (l) { return l.aluno.id; });
   var MEDALHAS = ['🥇', '🥈', '🥉'];
 
-  linhas.sort(function (a, b) {
-    if (ordemNotas === 'nome') return a.aluno.nome.localeCompare(b.aluno.nome, 'pt-BR');
-    if (ordemNotas === 'poucos') return a.vezes - b.vezes || a.aluno.nome.localeCompare(b.aluno.nome, 'pt-BR');
-    if (a.nota === null && b.nota === null) return a.aluno.nome.localeCompare(b.aluno.nome, 'pt-BR');
-    if (a.nota === null) return 1;
-    if (b.nota === null) return -1;
-    return ordemNotas === 'maior' ? b.nota - a.nota : a.nota - b.nota;
-  });
+  if (ordemNotas === 'nome') {
+    linhas.sort(function (a, b) { return a.aluno.nome.localeCompare(b.aluno.nome, 'pt-BR'); });
+  } else if (ordemNotas === 'poucos') {
+    linhas.sort(function (a, b) {
+      return a.vezes - b.vezes || a.aluno.nome.localeCompare(b.aluno.nome, 'pt-BR');
+    });
+  } else {
+    ordenarPorRanking(linhas, ordemNotas === 'menor');
+  }
 
   linhas.forEach(function (l) {
     var b = cria('button', 'linha-nota');
@@ -1353,9 +1370,8 @@ function renderProjetor() {
     placar.appendChild(d);
   });
 
-  // as medalhas são das três maiores da turma, mesmo na ordem alfabética
-  var premiados = comNota.slice()
-    .sort(function (a, b) { return b.nota - a.nota; })
+  // as medalhas são do pódio do ranking, mesmo na ordem alfabética
+  var premiados = ordenarPorRanking(comNota.slice())
     .slice(0, 3)
     .map(function (l) { return l.aluno.id; });
   var MEDALHAS = ['🥇', '🥈', '🥉'];
@@ -1365,13 +1381,11 @@ function renderProjetor() {
     return l.nota !== null && l.nota >= projCorte;
   });
 
-  lista.sort(function (a, b) {
-    if (projOrdem === 'alfa') return a.aluno.nome.localeCompare(b.aluno.nome, 'pt-BR');
-    if (a.nota === null && b.nota === null) return a.aluno.nome.localeCompare(b.aluno.nome, 'pt-BR');
-    if (a.nota === null) return 1;
-    if (b.nota === null) return -1;
-    return b.nota - a.nota;
-  });
+  if (projOrdem === 'alfa') {
+    lista.sort(function (a, b) { return a.aluno.nome.localeCompare(b.aluno.nome, 'pt-BR'); });
+  } else {
+    ordenarPorRanking(lista);
+  }
 
   var caixa = $('#projLista');
   caixa.textContent = '';
