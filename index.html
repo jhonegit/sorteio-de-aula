@@ -61,6 +61,9 @@
       <button id="btnGrupo" class="btn-grupo secundario" type="button">
         <span aria-hidden="true">🎯</span>Pergunta para o grupo
       </button>
+      <button id="btnVarios" class="btn-varios secundario" type="button">
+        <span aria-hidden="true">👥</span>Vários alunos de uma vez
+      </button>
     </div>
 
     <div id="acoesResultado" class="acoes-resultado oculto">
@@ -106,9 +109,14 @@
         <option value="poucos">Caiu menos vezes</option>
       </select>
     </div>
+    <div class="faixa-periodo">
+      <select id="periodoNotas" aria-label="Período que está sendo mostrado"></select>
+      <span id="periodoAviso" class="periodo-aviso"></span>
+    </div>
+
     <div id="placarTurma" class="placar"></div>
     <div id="listaNotas" class="lista-notas"></div>
-    <p class="ajuda">Toque no 📽 lá em cima para mostrar a lista no projetor, com letra grande e legenda. A nota é a média dos pontos do aluno multiplicada por 10. Conta tudo: sorteio, quem se ofereceu e atividade. O que tem peso extra (⚡) pesa por dois ou três na média. O 🔥 mostra quantas vezes o aluno se ofereceu por vontade própria, e não altera a nota. Toque num nome para ver ou corrigir o histórico dele.</p>
+    <p class="ajuda">Quando a turma tiver mais de um período, a lista do alto escolhe qual você está vendo: o de agora, um já encerrado ou tudo junto. Toque no 📽 lá em cima para mostrar a lista no projetor, com letra grande e legenda. A nota é a média dos pontos do aluno multiplicada por 10. Conta tudo: sorteio, quem se ofereceu e atividade. O que tem peso extra (⚡) pesa por dois ou três na média. O 🔥 mostra quantas vezes o aluno se ofereceu por vontade própria, e não altera a nota. Toque num nome para ver ou corrigir o histórico dele.</p>
   </section>
 
   <!-- ============ TURMA ============ -->
@@ -143,6 +151,14 @@
         <button id="btnDesfazerAtividade" type="button">Desfazer</button>
       </div>
       <p class="ajuda">Marca de uma vez quem fez, quem fez em parte e quem faltou. Quem você não marcar entra como "não fez": vale zero, mas fica registrado que teve a chance. Quem já foi marcado como falta hoje no sorteio vem marcado assim sozinho. Ninguém gasta a vez no sorteio.</p>
+    </div>
+
+    <div class="bloco">
+      <label>Período</label>
+      <p id="periodoAtualTexto" class="periodo-atual"></p>
+      <button id="btnNovoPeriodo" type="button">🔄 Começar um novo período</button>
+      <button id="btnVoltarPeriodo" class="secundario oculto" type="button">↩ Voltar para o período anterior</button>
+      <p class="ajuda">Zera as notas da turma para começar um bimestre, uma disciplina ou uma prova nova. Nada é apagado: o que já foi registrado fica guardado no período que termina e continua na tela de Notas, é só escolher o período lá em cima.</p>
     </div>
 
     <div class="bloco">
@@ -327,6 +343,85 @@
   <div class="linha-botoes">
     <button id="btnGrupoCancelar" class="secundario" type="button">Cancelar</button>
     <button id="btnGrupoLancar" type="button">Lançar</button>
+  </div>
+</dialog>
+
+<dialog id="dlgVarios">
+  <h2>Vários alunos de uma vez</h2>
+
+  <div class="linha-peso">
+    <span class="rotulo-peso">Quem</span>
+    <div id="modoVarios" class="chips-peso">
+      <button type="button" class="chip-peso ativo" data-modo="ofereceu">✋ Se ofereceram</button>
+      <button type="button" class="chip-peso" data-modo="sorteio">🎲 Sortear</button>
+    </div>
+  </div>
+
+  <div id="linhaSorteioVarios" class="linha-peso oculto">
+    <span class="rotulo-peso">Quantos</span>
+    <div id="qtdVarios" class="chips-peso">
+      <button type="button" class="chip-peso" data-qtd="2">2</button>
+      <button type="button" class="chip-peso ativo" data-qtd="3">3</button>
+      <button type="button" class="chip-peso" data-qtd="4">4</button>
+      <button type="button" class="chip-peso" data-qtd="5">5</button>
+      <button type="button" class="chip-peso" data-qtd="6">6</button>
+    </div>
+    <button id="btnRessortearVarios" class="menor" type="button">🎲 Sortear de novo</button>
+  </div>
+
+  <div id="buscaVariosCaixa">
+    <input id="buscaVarios" class="campo-busca" type="text" placeholder="Buscar o nome e tocar para juntar"
+           autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false">
+    <div id="listaBuscaVarios" class="lista-busca oculto"></div>
+  </div>
+
+  <div class="atalhos-ativ">
+    <span class="rotulo-peso">Todos</span>
+    <button class="menor todos-op certo"   data-todos="certo"   type="button">✓</button>
+    <button class="menor todos-op errou"   data-todos="errou"   type="button">≈</button>
+    <button class="menor todos-op naosabe" data-todos="naoSabe" type="button">?</button>
+    <button class="menor todos-op recusou" data-todos="recusou" type="button">✕</button>
+    <button id="btnLimparVarios" class="menor" type="button">limpar</button>
+  </div>
+
+  <div id="listaVarios" class="lista-grupo"></div>
+
+  <div class="linha-peso">
+    <span class="rotulo-peso">Peso</span>
+    <div id="pesoVarios" class="chips-peso">
+      <button type="button" class="chip-peso ativo" data-mult="1">×1</button>
+      <button type="button" class="chip-peso" data-mult="2">×2</button>
+      <button type="button" class="chip-peso" data-mult="3">×3</button>
+    </div>
+    <small id="explicaPesoVarios">conta como 1 participação</small>
+  </div>
+
+  <p id="resumoVarios" class="resumo-ativ"></p>
+
+  <div class="linha-botoes">
+    <button id="btnVariosCancelar" class="secundario" type="button">Cancelar</button>
+    <button id="btnVariosLancar" type="button">Lançar</button>
+  </div>
+</dialog>
+
+<dialog id="dlgPeriodo">
+  <h2>Começar um novo período</h2>
+  <p class="ajuda">As notas voltam do zero para a turma inteira. Nada é apagado: tudo que já foi registrado fica guardado no período que termina, e continua aparecendo em Notas quando você escolher ele na lista.</p>
+
+  <p id="resumoPeriodo" class="resumo-ativ"></p>
+
+  <label class="rotulo-campo" for="nomePeriodoAntigo">Nome do período que termina</label>
+  <input id="nomePeriodoAntigo" class="campo-busca" type="text" autocomplete="off" autocapitalize="sentences">
+
+  <label class="rotulo-campo" for="nomePeriodoNovo">Nome do período que começa</label>
+  <input id="nomePeriodoNovo" class="campo-busca" type="text" autocomplete="off" autocapitalize="sentences">
+
+  <button id="btnBackupPeriodo" class="secundario" type="button">💾 Baixar o backup antes</button>
+  <p id="avisoBackupPeriodo" class="ajuda">Guarde o arquivo antes de virar o período. Ele serve para restaurar tudo se o aparelho der problema.</p>
+
+  <div class="linha-botoes">
+    <button id="btnPeriodoCancelar" class="secundario" type="button">Cancelar</button>
+    <button id="btnPeriodoConfirmar" type="button">Começar o período novo</button>
   </div>
 </dialog>
 

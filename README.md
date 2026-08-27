@@ -32,6 +32,21 @@ Funciona no celular, instalado como aplicativo, e abre sem internet.
 - No ranking, a nota manda: quem tem 10 nunca aparece abaixo de quem tem 9.
   Entre os que empatam, sobe quem participou mais; empatando de novo, quem
   mais se ofereceu. É só a ordem da lista: nenhuma nota muda por causa disso.
+- Vários alunos de uma vez: quando meia turma levanta a mão, dá para juntar os
+  nomes na busca e lançar todos de um golpe, cada um com o resultado dele. No
+  mesmo lugar dá para sortear de 2 a 6 alunos em vez de escolher. O atalho
+  "Todos" marca a lista inteira com um toque, e quem ficar sem marca não é
+  lançado nem gasta a vez. Quem foi escolhido por vontade própria leva o 🔥;
+  quem saiu no sorteio, não.
+- Aluno sorteado que não está na sala: o ↻ na linha dele marca a falta do dia,
+  tira ele do grupo e sorteia outro no lugar, sem parar a aula. Serve no
+  "vários de uma vez" e na pergunta para o grupo.
+- Começar um novo período: em Turmas, o botão 🔄 zera as notas da turma para um
+  bimestre, uma disciplina ou uma prova nova. Nada é apagado: o que já foi
+  registrado fica guardado no período que termina, e volta na tela de Notas
+  quando você escolher ele na lista do alto. A janela lembra de baixar o backup
+  antes e tem o botão ali mesmo. Enquanto o período novo estiver vazio, dá para
+  voltar atrás. A rodada do sorteio e as faltas do dia recomeçam junto.
 - Pergunta para o grupo: sorteia até 5 de uma vez para a mesma questão de
   múltipla escolha. Marque a letra que cada um respondeu, marque a resposta
   certa e lance tudo junto: quem bateu leva "respondeu certo", o resto leva
@@ -63,7 +78,9 @@ Tudo é guardado no próprio aparelho. Nenhum nome de aluno está no código e n
 Em Ajustes há três downloads: o backup completo (para restaurar depois), a
 planilha de notas e a planilha de registros. Todo arquivo baixado leva o nome
 da turma, a data e a hora, então um download nunca cobre o outro. O backup é
-sempre de todas as turmas; o nome da turma serve só para achar o arquivo.
+sempre de todas as turmas e de todos os períodos; o nome da turma serve só para
+achar o arquivo. As duas planilhas saem do período que estiver escolhido na
+tela de Notas, e o nome do período entra no nome do arquivo.
 
 Para mostrar na sala sem copiar nada, ligue o próprio celular no projetor
 (adaptador USB-C para HDMI, ou espelhamento na TV) e use o 📽 da tela de Notas.

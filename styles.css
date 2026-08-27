@@ -1394,3 +1394,96 @@ body.projetando .rodape { display: none; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
 }
+
+/* ---------- vários alunos de uma vez ---------- */
+
+/* verde, para não ser confundido com o sortear, o voluntário nem o grupo */
+.btn-varios {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: .45rem;
+  width: 100%;
+  padding: .75rem 1rem;
+  font-size: .92rem;
+  font-weight: 600;
+  color: #6ee7b7;
+  background: rgba(52, 211, 153, .07);
+  border-color: rgba(52, 211, 153, .35);
+}
+
+/* a janela vira uma coluna: só a lista de nomes rola, o resto fica fixo */
+#dlgVarios[open] { display: flex; flex-direction: column; }
+#dlgVarios[open] > *:not(.lista-grupo) { flex: 0 0 auto; }
+
+#dlgVarios .campo-busca { margin-top: .6rem; }
+#dlgVarios .lista-busca { max-height: 30vh; margin-top: .4rem; }
+#dlgVarios .atalhos-ativ { align-items: center; }
+#dlgVarios #explicaPesoVarios { font-size: .72rem; color: var(--fraco); }
+
+.todos-op { width: 2.2rem; padding: .45rem 0; font-size: .95rem; line-height: 1; }
+.todos-op.certo   { color: var(--verde);    border-color: rgba(52, 211, 153, .4); }
+.todos-op.errou   { color: var(--ambar);    border-color: rgba(251, 191, 36, .4); }
+.todos-op.naosabe { color: var(--cinza);    border-color: rgba(148, 163, 184, .4); }
+.todos-op.recusou { color: var(--vermelho); border-color: rgba(251, 113, 133, .4); }
+
+.varios-linha .grupo-cabeca { gap: .45rem; }
+.varios-ops { display: grid; grid-template-columns: repeat(5, 1fr); gap: .3rem; }
+.varios-ops .ativ-op { width: auto; height: 2.1rem; font-size: 1rem; }
+.ativ-op.ativo.naosabe { background: rgba(148, 163, 184, .2); border-color: rgba(148, 163, 184, .55); color: var(--cinza); }
+
+/* o ✕ de tirar da lista e o ↻ de faltou, no canto da linha */
+.tirar-varios {
+  flex: 0 0 auto;
+  background: none;
+  border: 0;
+  color: var(--fraco);
+  padding: .2rem .35rem;
+  font-size: .95rem;
+  line-height: 1;
+}
+
+.lista-grupo .vazio { padding: 1.4rem 1rem; }
+
+/* ---------- períodos ---------- */
+
+.faixa-periodo {
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+  flex-wrap: wrap;
+  margin-bottom: .7rem;
+}
+
+#periodoNotas {
+  width: auto;
+  flex: 1 1 12rem;
+  min-width: 0;
+  padding: .4rem .55rem;
+  font-size: .82rem;
+  border-radius: 10px;
+}
+
+.periodo-aviso { font-size: .72rem; color: var(--fraco); }
+.periodo-aviso.destaque { color: #fcd34d; }
+
+.periodo-atual {
+  margin: 0 0 .6rem;
+  font-size: .85rem;
+  font-weight: 600;
+  color: var(--texto);
+}
+
+.rotulo-campo {
+  display: block;
+  margin-top: .8rem;
+  font-size: .68rem;
+  text-transform: uppercase;
+  letter-spacing: .12em;
+  color: var(--fraco);
+  font-weight: 700;
+}
+
+.rotulo-campo + .campo-busca { margin-top: .3rem; }
+
+#dlgPeriodo #btnBackupPeriodo { width: 100%; margin-top: .9rem; }

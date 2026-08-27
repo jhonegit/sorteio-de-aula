@@ -4,7 +4,7 @@
 'use strict';
 
 var CHAVE = 'sorteio-alunos-v1';
-var VERSAO = 'v11';   // aparece em Ajustes; tem que bater com o CACHE do sw.js
+var VERSAO = 'v12';   // aparece em Ajustes; tem que bater com o CACHE do sw.js
 
 var PESOS_PADRAO = { certo: 1, errou: 0.7, naoSabe: 0.4, recusou: 0 };
 
@@ -36,6 +36,7 @@ var sorteado = null;     // id do aluno que está na tela
 var ultimaAcao = null;   // guarda o que dá pra desfazer
 var girando = false;
 var ordemNotas = 'nome';
+var periodoVisto = 'atual';   // qual período a tela de Notas mostra: 'atual', 'todos' ou um id
 var armazenamentoOk = true;
 var segurando = null;    // botão de resultado que está sendo segurado agora
 var travado = false;     // segura o app durante o estouro do dobro
@@ -82,6 +83,10 @@ function num(n) { return Number(n).toFixed(1).replace('.', ','); }
 function comSinal(v) { return (v > 0 ? '+' : '') + num(v); }
 
 function dataCurta(iso) {
+  // "2026-08-26" sozinho é um dia daqui, não um horário: formata sem fuso
+  var so = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(iso));
+  if (so) return so[3] + '/' + so[2];
+
   var d = new Date(iso);
   if (isNaN(d)) return '';
   return String(d.getDate()).padStart(2, '0') + '/' + String(d.getMonth() + 1).padStart(2, '0');
@@ -256,6 +261,7 @@ function carregar() {
     dados.turmas.push({ id: novoId(), nome: 'Turma 1', alunos: [] });
   }
   if (!turmaAtual()) dados.turmaAtiva = dados.turmas[0].id;
+  dados.turmas.forEach(function (t) { garantirPeriodos(t); });
 }
 
 function salvar() {
@@ -290,6 +296,71 @@ function alunoPorId(turma, id) {
   return null;
 }
 
+/* ---------- períodos ---------- */
+
+/* Cada turma tem uma fila de períodos (bimestre, disciplina, prova). O último
+   da fila é o que está valendo. Todo registro nasce carimbado com o id do
+   período, então "zerar as notas" é só abrir um período novo: nada é apagado,
+   o que já foi registrado continua guardado no período que terminou. */
+
+function garantirPeriodos(turma) {
+  if (Array.isArray(turma.periodos) && turma.periodos.length) return;
+  var p = { id: novoId(), nome: 'Período 1', inicio: hoje(), fim: null };
+  turma.periodos = [p];
+  // o que já existia neste aparelho passa a pertencer ao primeiro período
+  dados.registros.forEach(function (r) {
+    if (r.turmaId === turma.id && !r.per) r.per = p.id;
+  });
+  salvar();   // grava na hora: o id do período não pode mudar depois
+}
+
+function periodosDe(turma) {
+  garantirPeriodos(turma);
+  return turma.periodos;
+}
+
+function periodoAtual(turma) {
+  var ps = periodosDe(turma);
+  return ps[ps.length - 1];
+}
+
+function periodoPorId(turma, id) {
+  var achados = periodosDe(turma).filter(function (p) { return p.id === id; });
+  return achados[0] || null;
+}
+
+// qual período a tela de Notas está mostrando. null = todos juntos
+function periodoVendo(turma) {
+  if (periodoVisto === 'todos') return null;
+  if (periodoVisto === 'atual') return periodoAtual(turma);
+  return periodoPorId(turma, periodoVisto) || periodoAtual(turma);
+}
+
+// os registros que a tela de Notas deve considerar (respeita o período escolhido)
+function registrosDa(turma) {
+  var p = periodoVendo(turma);
+  return dados.registros.filter(function (r) {
+    return r.turmaId === turma.id && (!p || r.per === p.id);
+  });
+}
+
+// os registros do período que está valendo agora, seja qual for a tela aberta
+function registrosAgora(turma) {
+  var p = periodoAtual(turma);
+  return dados.registros.filter(function (r) {
+    return r.turmaId === turma.id && r.per === p.id;
+  });
+}
+
+// quantas vezes cada aluno participou no período que está valendo
+function contarParticipacoes(turma) {
+  var vezes = {};
+  registrosAgora(turma).forEach(function (r) {
+    vezes[r.alunoId] = (vezes[r.alunoId] || 0) + 1;
+  });
+  return vezes;
+}
+
 function rodada(turmaId) {
   if (!Array.isArray(dados.rodadas[turmaId])) dados.rodadas[turmaId] = [];
   return dados.rodadas[turmaId];
@@ -320,7 +391,7 @@ function multiploDe(registro) {
 }
 
 function estatisticas(turma) {
-  var regs = dados.registros.filter(function (r) { return r.turmaId === turma.id; });
+  var regs = registrosDa(turma);
   return turma.alunos.map(function (a) {
     var meus = regs.filter(function (r) { return r.alunoId === a.id; });
     var soma = 0, divisor = 0, dobros = 0, ofertas = 0;
@@ -365,7 +436,7 @@ function ordenarPorRanking(lista, doPiorPraMelhor) {
 
 // quantos "respondeu certo" seguidos a turma emendou até agora
 function sequencia(turma) {
-  var regs = dados.registros.filter(function (r) { return r.turmaId === turma.id; });
+  var regs = registrosAgora(turma);
   var n = 0;
   for (var i = regs.length - 1; i >= 0; i--) {
     if (regs[i].resultado === 'certo') n++; else break;
@@ -897,10 +968,7 @@ function renderBusca() {
 
   var feitos = rodada(t.id);
   var faltaram = ausentes(t.id);
-  var vezes = {};
-  dados.registros.forEach(function (r) {
-    if (r.turmaId === t.id) vezes[r.alunoId] = (vezes[r.alunoId] || 0) + 1;
-  });
+  var vezes = contarParticipacoes(t);
 
   achados.slice(0, 40).forEach(function (a, i) {
     var b = cria('button', 'linha-busca' + (i === 0 ? ' primeiro' : ''));
@@ -941,6 +1009,7 @@ function registrar(resultado, dobro) {
   var reg = {
     id: novoId(),
     turmaId: t.id,
+    per: periodoAtual(t).id,
     alunoId: aluno.id,
     resultado: resultado,
     data: new Date().toISOString()
@@ -1018,6 +1087,11 @@ function atualizarDesfazer() {
   } else if (ultimaAcao.tipo === 'grupo') {
     texto = 'Grupo de ' + ultimaAcao.total + ' (resposta ' + ultimaAcao.gabarito + '): ' +
             ultimaAcao.acertos + (ultimaAcao.acertos === 1 ? ' acertou' : ' acertaram');
+  } else if (ultimaAcao.tipo === 'varios') {
+    texto = (ultimaAcao.ofereceu ? '🔥 ' : '👥 ') + ultimaAcao.total +
+            (ultimaAcao.total === 1 ? ' aluno lançado' : ' alunos lançados') +
+            (ultimaAcao.acertos ? ' · ' + ultimaAcao.acertos +
+              (ultimaAcao.acertos === 1 ? ' acertou' : ' acertaram') : '');
   } else {
     texto = ultimaAcao.nome + ': ' + (ROTULOS[ultimaAcao.resultado] || 'registrado') +
             (ultimaAcao.dobro ? ' ⚡' : '');
@@ -1038,7 +1112,7 @@ function desfazer() {
       var pos = r.indexOf(a.alunoId);
       if (pos !== -1) r.splice(pos, 1);
     }
-  } else if (a.tipo === 'grupo') {
+  } else if (a.tipo === 'grupo' || a.tipo === 'varios') {
     dados.registros = dados.registros.filter(function (r) { return r.lote !== a.lote; });
     var naRodada = rodada(a.turmaId);
     (a.novos || []).forEach(function (id) {
@@ -1059,9 +1133,51 @@ function desfazer() {
 
 /* ---------- tela de notas ---------- */
 
+/* A lista de períodos no alto da tela de Notas. Enquanto houver só um período,
+   ela some: não faz sentido escolher entre uma coisa só. */
+function renderSeletorPeriodo(t) {
+  var ps = periodosDe(t);
+  var caixa = $('.faixa-periodo');
+  var sel = $('#periodoNotas');
+  var aviso = $('#periodoAviso');
+
+  if (ps.length < 2) {
+    caixa.classList.add('oculto');
+    return;
+  }
+  caixa.classList.remove('oculto');
+
+  sel.textContent = '';
+  var opcoes = [['atual', periodoAtual(t).nome + ' (o de agora)']];
+  ps.slice(0, -1).reverse().forEach(function (p) {
+    opcoes.push([p.id, p.nome + ' (encerrado)']);
+  });
+  opcoes.push(['todos', 'Todos os períodos juntos']);
+
+  opcoes.forEach(function (par) {
+    var op = document.createElement('option');
+    op.value = par[0];
+    op.textContent = par[1];
+    if (par[0] === periodoVisto) op.selected = true;
+    sel.appendChild(op);
+  });
+
+  var p = periodoVendo(t);
+  if (periodoVisto === 'atual') {
+    aviso.textContent = '';
+    aviso.classList.remove('destaque');
+  } else {
+    aviso.classList.add('destaque');
+    aviso.textContent = p
+      ? 'histórico · ' + dataCurta(p.inicio) + ' a ' + (p.fim ? dataCurta(p.fim) : 'hoje')
+      : 'somando tudo desde o começo';
+  }
+}
+
 function renderNotas() {
   var t = turmaAtual();
   renderTopo(t);
+  renderSeletorPeriodo(t);
 
   var caixa = $('#listaNotas');
   caixa.textContent = '';
@@ -1475,6 +1591,7 @@ function renderTurma() {
 
   $('#contaAlunos').textContent = t.alunos.length;
   renderDesfazerAtividade();
+  renderBlocoPeriodo(t);
 
   var lista = $('#listaAlunos');
   lista.textContent = '';
@@ -1669,6 +1786,7 @@ function lancarAtividade() {
     var reg = {
       id: novoId(),
       turmaId: t.id,
+      per: periodoAtual(t).id,
       alunoId: a.id,
       resultado: e.resultado,
       data: quando,
@@ -1738,38 +1856,39 @@ function abrirGrupo() {
 // meio do grupo, ela recomeça ali mesmo e o resto sai da lista nova
 function sortearGrupo() {
   var t = turmaAtual();
-  var faltaram = ausentes(t.id);
-  var possiveis = t.alunos.filter(function (a) { return faltaram.indexOf(a.id) === -1; });
 
   grupoIds = [];
   grupoAlt = {};
   grupoGabarito = null;
 
-  if (!possiveis.length) {
+  grupoIds = sortearVarios(t, grupoQtd, []);
+
+  if (!grupoIds.length) {
     alert('Ninguém disponível: todos estão marcados como falta hoje.');
     return false;
   }
 
-  var pool = disponiveis(t).slice();
-  var recomecou = false;
-
-  while (grupoIds.length < grupoQtd) {
-    if (!pool.length) {
-      if (recomecou) break;                 // a turma é menor que o grupo pedido
-      recomecou = true;
-      dados.rodadas[t.id] = [];             // todo mundo já passou: rodada nova
-      pool = possiveis.filter(function (a) { return grupoIds.indexOf(a.id) === -1; });
-      if (!pool.length) break;
-    }
-    var i = aleatorio(pool.length);
-    grupoIds.push(pool[i].id);
-    pool.splice(i, 1);
-  }
-
-  if (recomecou) salvar();
   vibrar(12);
   renderGrupo();
   return true;
+}
+
+// aluno sorteado que não está na sala: marca a falta do dia e chama outro
+function faltouNoGrupo(alunoId) {
+  var t = turmaAtual();
+  var lista = ausentes(t.id);
+  if (lista.indexOf(alunoId) === -1) lista.push(alunoId);
+  salvar();
+
+  grupoIds = grupoIds.filter(function (id) { return id !== alunoId; });
+  delete grupoAlt[alunoId];
+
+  var substituto = sortearVarios(t, 1, grupoIds);
+  if (substituto.length) grupoIds.push(substituto[0]);
+
+  vibrar(14);
+  renderGrupo();
+  renderSortear();
 }
 
 function contarGrupo() {
@@ -1833,6 +1952,14 @@ function renderGrupo() {
     pintarAvatar(av, a.nome);
     cabeca.appendChild(av);
     cabeca.appendChild(cria('span', 'grupo-nome', a.nome));
+
+    // não veio hoje: sai do grupo, entra a falta do dia e outro é sorteado
+    var falta = cria('button', 'tirar-varios', '↻');
+    falta.type = 'button';
+    falta.title = 'Faltou hoje (sorteia outro no lugar)';
+    falta.addEventListener('click', function () { faltouNoGrupo(id); });
+    cabeca.appendChild(falta);
+
     linha.appendChild(cabeca);
 
     var botoes = cria('div', 'alts');
@@ -1886,6 +2013,7 @@ function lancarGrupo() {
     var reg = {
       id: novoId(),
       turmaId: t.id,
+      per: periodoAtual(t).id,
       alunoId: id,
       resultado: letra === grupoGabarito ? 'certo' : 'errou',
       data: quando,
@@ -1930,6 +2058,464 @@ function lancarGrupo() {
   renderNotas();
 }
 
+/* ---------- vários alunos de uma vez ---------- */
+
+/* Uma janela só para os dois casos que atrapalhavam a aula: vários alunos se
+   oferecem ao mesmo tempo (e chamar um por um demora), ou você quer sortear um
+   punhado de uma vez. Cada nome ganha o resultado dele ali na linha, e quem
+   não está na sala sai com um toque, sorteando um substituto na hora.
+   Quem ficar sem marca nenhuma não é lançado e não gasta a vez. */
+
+var VARIOS_OPS = [
+  { chave: 'certo',   glifo: '✓', classe: 'certo',   titulo: 'Respondeu certo' },
+  { chave: 'errou',   glifo: '≈', classe: 'errou',   titulo: 'Respondeu, mas errou' },
+  { chave: 'naoSabe', glifo: '?', classe: 'naosabe', titulo: 'Disse que não sabe' },
+  { chave: 'recusou', glifo: '✕', classe: 'recusou', titulo: 'Se recusou a responder' }
+];
+
+var variosModo = 'ofereceu';   // 'ofereceu' = escolhidos por você, 'sorteio' = sorteados
+var variosIds = [];            // quem está na lista da janela
+var variosRes = {};            // alunoId -> resultado marcado
+var variosQtd = 3;             // quantos sortear de uma vez
+var multVarios = 1;            // peso desta rodada
+
+/* Sorteia até "quantos" alunos sem repetir ninguém que já caiu na rodada e sem
+   pegar quem faltou hoje. Se a rodada acabar no meio, ela recomeça ali mesmo.
+   Serve tanto para esta janela quanto para a pergunta do grupo. */
+function sortearVarios(turma, quantos, fora) {
+  var faltaram = ausentes(turma.id);
+  var possiveis = turma.alunos.filter(function (a) { return faltaram.indexOf(a.id) === -1; });
+  var escolhidos = [];
+  if (!possiveis.length) return escolhidos;
+
+  var jaTem = (fora || []).slice();
+  var pool = disponiveis(turma).filter(function (a) { return jaTem.indexOf(a.id) === -1; });
+  var recomecou = false;
+
+  while (escolhidos.length < quantos) {
+    if (!pool.length) {
+      if (recomecou) break;                   // a turma é menor que o pedido
+      recomecou = true;
+      dados.rodadas[turma.id] = [];           // todo mundo já passou: rodada nova
+      pool = possiveis.filter(function (a) {
+        return jaTem.indexOf(a.id) === -1 && escolhidos.indexOf(a.id) === -1;
+      });
+      if (!pool.length) break;
+    }
+    var i = aleatorio(pool.length);
+    escolhidos.push(pool[i].id);
+    pool.splice(i, 1);
+  }
+
+  if (recomecou) salvar();
+  return escolhidos;
+}
+
+function abrirVarios() {
+  var t = turmaAtual();
+  if (!t.alunos.length) {
+    alert('Cadastre os alunos desta turma antes de lançar vários de uma vez.');
+    return;
+  }
+  variosModo = 'ofereceu';
+  variosIds = [];
+  variosRes = {};
+  multVarios = 1;
+  $('#buscaVarios').value = '';
+  renderVarios();
+  abrirJanela($('#dlgVarios'));
+  $('#buscaVarios').focus();
+}
+
+function trocarModoVarios(modo) {
+  if (modo === variosModo) return;
+  variosModo = modo;
+  variosIds = [];
+  variosRes = {};
+  $('#buscaVarios').value = '';
+
+  if (modo === 'sorteio') {
+    var t = turmaAtual();
+    variosIds = sortearVarios(t, variosQtd, []);
+    if (!variosIds.length) {
+      alert('Ninguém disponível: todos estão marcados como falta hoje.');
+      variosModo = 'ofereceu';
+    } else {
+      vibrar(12);
+    }
+  }
+  renderVarios();
+}
+
+function ressortearVarios() {
+  var t = turmaAtual();
+  variosRes = {};
+  variosIds = sortearVarios(t, variosQtd, []);
+  if (!variosIds.length) alert('Ninguém disponível: todos estão marcados como falta hoje.');
+  else vibrar(12);
+  renderVarios();
+}
+
+function juntarNoVarios(alunoId) {
+  if (variosIds.indexOf(alunoId) === -1) variosIds.push(alunoId);
+  $('#buscaVarios').value = '';
+  vibrar(10);
+  renderVarios();
+}
+
+function tirarDoVarios(alunoId) {
+  variosIds = variosIds.filter(function (id) { return id !== alunoId; });
+  delete variosRes[alunoId];
+  renderVarios();
+}
+
+// o aluno não está na sala: marca a falta do dia e, se ele tinha sido sorteado,
+// já sorteia outro no lugar dele
+function faltouNoVarios(alunoId) {
+  var t = turmaAtual();
+  var lista = ausentes(t.id);
+  if (lista.indexOf(alunoId) === -1) lista.push(alunoId);
+  salvar();
+
+  variosIds = variosIds.filter(function (id) { return id !== alunoId; });
+  delete variosRes[alunoId];
+
+  if (variosModo === 'sorteio') {
+    var substituto = sortearVarios(t, 1, variosIds);
+    if (substituto.length) variosIds.push(substituto[0]);
+  }
+  vibrar(14);
+  renderVarios();
+  renderSortear();
+}
+
+function renderBuscaVarios() {
+  var t = turmaAtual();
+  var caixa = $('#listaBuscaVarios');
+  var texto = $('#buscaVarios').value.trim();
+  caixa.textContent = '';
+
+  if (variosModo !== 'ofereceu' || !texto) {
+    caixa.classList.add('oculto');
+    return;
+  }
+  caixa.classList.remove('oculto');
+
+  var achados = buscarAlunos(t, texto).filter(function (a) {
+    return variosIds.indexOf(a.id) === -1;      // quem já está na lista sai da busca
+  });
+
+  if (!achados.length) {
+    caixa.appendChild(cria('p', 'vazio', 'Nenhum nome novo parecido com isso.'));
+    return;
+  }
+
+  var feitos = rodada(t.id);
+  var faltaram = ausentes(t.id);
+  var vezes = contarParticipacoes(t);
+
+  achados.slice(0, 12).forEach(function (a, i) {
+    var b = cria('button', 'linha-busca' + (i === 0 ? ' primeiro' : ''));
+    b.type = 'button';
+
+    var av = cria('span', 'avatar');
+    pintarAvatar(av, a.nome);
+    b.appendChild(av);
+
+    var info = cria('div', 'info');
+    info.appendChild(cria('span', 'nome', a.nome));
+
+    var n = vezes[a.id] || 0;
+    var recado = n === 0 ? 'ainda não participou' : n === 1 ? '1 participação' : n + ' participações';
+    var marca = cria('span', 'marca', recado);
+    if (faltaram.indexOf(a.id) !== -1) {
+      marca.textContent = recado + ' · marcado como falta hoje';
+      marca.classList.add('destaque');
+    } else if (feitos.indexOf(a.id) !== -1) {
+      marca.textContent = recado + ' · já caiu nesta rodada';
+      marca.classList.add('destaque');
+    }
+    info.appendChild(marca);
+    b.appendChild(info);
+
+    b.addEventListener('click', function () { juntarNoVarios(a.id); });
+    caixa.appendChild(b);
+  });
+}
+
+function contarVarios() {
+  var c = { total: variosIds.length, marcados: 0, certo: 0, sem: 0 };
+  variosIds.forEach(function (id) {
+    var r = variosRes[id];
+    if (!r) { c.sem++; return; }
+    c.marcados++;
+    if (r === 'certo') c.certo++;
+  });
+  return c;
+}
+
+function textoResumoVarios() {
+  var c = contarVarios();
+  if (!c.total) {
+    return variosModo === 'sorteio'
+      ? 'Ninguém sorteado ainda.'
+      : 'Busque os nomes acima e toque para juntar na lista.';
+  }
+  if (!c.marcados) return 'Marque o que aconteceu com cada um (ou use os atalhos "Todos").';
+
+  var partes = [c.marcados + (c.marcados === 1 ? ' vai ser lançado' : ' vão ser lançados')];
+  if (c.certo) partes.push(c.certo + (c.certo === 1 ? ' acertou' : ' acertaram'));
+  if (c.sem) partes.push(c.sem + (c.sem === 1 ? ' sem marca fica de fora' : ' sem marca ficam de fora'));
+  return partes.join(' · ');
+}
+
+function renderVarios() {
+  var t = turmaAtual();
+
+  $$('#modoVarios .chip-peso').forEach(function (b) {
+    b.classList.toggle('ativo', b.dataset.modo === variosModo);
+  });
+  $$('#qtdVarios .chip-peso').forEach(function (b) {
+    b.classList.toggle('ativo', Number(b.dataset.qtd) === variosQtd);
+  });
+  $$('#pesoVarios .chip-peso').forEach(function (b) {
+    b.classList.toggle('ativo', Number(b.dataset.mult) === multVarios);
+  });
+  $('#explicaPesoVarios').textContent = multVarios === 1
+    ? 'conta como 1 participação'
+    : 'conta como ' + multVarios + ' participações';
+
+  $('#linhaSorteioVarios').classList.toggle('oculto', variosModo !== 'sorteio');
+  $('#buscaVariosCaixa').classList.toggle('oculto', variosModo !== 'ofereceu');
+  renderBuscaVarios();
+
+  var caixa = $('#listaVarios');
+  caixa.textContent = '';
+
+  if (!variosIds.length) {
+    caixa.appendChild(cria('p', 'vazio', variosModo === 'sorteio'
+      ? 'Ninguém sorteado. Toque em "Sortear de novo".'
+      : 'Nenhum nome na lista ainda.'));
+  }
+
+  variosIds.forEach(function (id) {
+    var a = alunoPorId(t, id);
+    if (!a) return;
+    var marcado = variosRes[id] || null;
+
+    var linha = cria('div', 'grupo-linha varios-linha' + (marcado ? ' marcado' : ''));
+
+    var cabeca = cria('div', 'grupo-cabeca');
+    var av = cria('span', 'avatar');
+    pintarAvatar(av, a.nome);
+    cabeca.appendChild(av);
+    cabeca.appendChild(cria('span', 'grupo-nome', a.nome));
+
+    var tirar = cria('button', 'tirar-varios', '✕');
+    tirar.type = 'button';
+    tirar.title = 'Tirar da lista (não registra nada)';
+    tirar.addEventListener('click', function () { tirarDoVarios(id); });
+    cabeca.appendChild(tirar);
+    linha.appendChild(cabeca);
+
+    var ops = cria('div', 'varios-ops');
+    VARIOS_OPS.forEach(function (o) {
+      var b = cria('button', 'ativ-op ' + o.classe + (marcado === o.chave ? ' ativo' : ''), o.glifo);
+      b.type = 'button';
+      b.title = o.titulo;
+      b.addEventListener('click', function () {
+        if (variosRes[id] === o.chave) delete variosRes[id];   // tocar de novo desmarca
+        else variosRes[id] = o.chave;
+        renderVarios();
+      });
+      ops.appendChild(b);
+    });
+
+    var falta = cria('button', 'ativ-op faltou', '↻');
+    falta.type = 'button';
+    falta.title = variosModo === 'sorteio'
+      ? 'Faltou hoje (sorteia outro no lugar)'
+      : 'Faltou hoje';
+    falta.addEventListener('click', function () { faltouNoVarios(id); });
+    ops.appendChild(falta);
+
+    linha.appendChild(ops);
+    caixa.appendChild(linha);
+  });
+
+  $('#resumoVarios').textContent = textoResumoVarios();
+}
+
+function lancarVarios() {
+  var t = turmaAtual();
+  var c = contarVarios();
+
+  if (!c.marcados) {
+    alert('Marque o que aconteceu com pelo menos um aluno antes de lançar.');
+    return;
+  }
+
+  var aviso = c.marcados === 1 ? 'O aluno gasta a vez na rodada.'
+                               : 'Os ' + c.marcados + ' gastam a vez na rodada.';
+  if (c.sem) aviso += '\nQuem ficou sem marca não é lançado e não gasta a vez.';
+
+  if (!confirm('Lançar para ' + c.marcados +
+               (c.marcados === 1 ? ' aluno' : ' alunos') + ' com peso ×' + multVarios + '?\n\n' +
+               textoResumoVarios() + '\n\n' + aviso)) return;
+
+  var lote = novoId();
+  var quando = new Date().toISOString();
+  var novos = [];
+
+  variosIds.forEach(function (id) {
+    var resultado = variosRes[id];
+    if (!resultado) return;
+    if (!alunoPorId(t, id)) return;
+
+    var reg = {
+      id: novoId(),
+      turmaId: t.id,
+      per: periodoAtual(t).id,
+      alunoId: id,
+      resultado: resultado,
+      data: quando,
+      lote: lote
+    };
+    if (multVarios > 1) reg.mult = multVarios;
+    if (variosModo === 'ofereceu') reg.ofereceu = true;   // a mão foi deles
+    dados.registros.push(reg);
+
+    if (rodada(t.id).indexOf(id) === -1) {
+      rodada(t.id).push(id);
+      novos.push(id);          // só estes voltam pro sorteio se você desfizer
+    }
+  });
+
+  ultimaAcao = {
+    tipo: 'varios', lote: lote, turmaId: t.id, novos: novos,
+    total: c.marcados, acertos: c.certo, ofereceu: variosModo === 'ofereceu'
+  };
+  salvar();
+
+  fecharJanela($('#dlgVarios'));
+
+  sorteado = null;
+  ofereceu = false;
+  $('#palco').classList.remove('revelado');
+  $('#palcoNome').textContent = c.marcados + (c.marcados === 1 ? ' aluno lançado' : ' alunos lançados');
+  $('#palcoDica').textContent = (variosModo === 'ofereceu' ? '🔥 se ofereceram' : '🎲 sorteados') +
+    (c.certo ? ' · ' + c.certo + (c.certo === 1 ? ' acertou' : ' acertaram') : '') +
+    (multVarios > 1 ? ' · ⚡ ×' + multVarios : '');
+  $('#acoesResultado').classList.add('oculto');
+  $('#acoesSorteio').classList.remove('oculto');
+  $('#btnSortear').disabled = false;
+
+  comemorar(c.certo ? 'certo' : 'errou', c.certo, multVarios > 1);
+
+  variosIds = [];
+  variosRes = {};
+
+  irPara('sortear');
+  renderNotas();
+}
+
+/* ---------- períodos: zerar as notas sem perder nada ---------- */
+
+function renderBlocoPeriodo(t) {
+  var ps = periodosDe(t);
+  var p = periodoAtual(t);
+  var quantos = registrosAgora(t).length;
+
+  $('#periodoAtualTexto').textContent = p.nome + ' · começou em ' + dataCurta(p.inicio) + ' · ' +
+    (quantos === 0 ? 'nenhum registro ainda'
+                   : quantos === 1 ? '1 registro' : quantos + ' registros');
+
+  // voltar atrás só enquanto o período novo estiver vazio: nada se perde assim
+  $('#btnVoltarPeriodo').classList.toggle('oculto', ps.length < 2 || quantos > 0);
+}
+
+function abrirPeriodo() {
+  var t = turmaAtual();
+  var p = periodoAtual(t);
+  var regs = registrosAgora(t);
+
+  var alunos = {};
+  regs.forEach(function (r) { alunos[r.alunoId] = true; });
+  var quantosAlunos = Object.keys(alunos).length;
+
+  $('#resumoPeriodo').textContent = regs.length
+    ? 'Vai ficar guardado em "' + p.nome + '": ' + regs.length +
+      (regs.length === 1 ? ' registro' : ' registros') + ' de ' + quantosAlunos +
+      (quantosAlunos === 1 ? ' aluno' : ' alunos') + '.'
+    : 'O período de agora ainda não tem nenhum registro.';
+
+  $('#nomePeriodoAntigo').value = p.nome;
+  $('#nomePeriodoNovo').value = 'Período ' + (periodosDe(t).length + 1);
+  $('#avisoBackupPeriodo').textContent =
+    'Guarde o arquivo antes de virar o período. Ele serve para restaurar tudo se o aparelho der problema.';
+  abrirJanela($('#dlgPeriodo'));
+}
+
+function comecarPeriodo() {
+  var t = turmaAtual();
+  var ps = periodosDe(t);
+  var p = periodoAtual(t);
+
+  var nomeAntigo = $('#nomePeriodoAntigo').value.replace(/\s+/g, ' ').trim() || p.nome;
+  var nomeNovo = $('#nomePeriodoNovo').value.replace(/\s+/g, ' ').trim() ||
+                 ('Período ' + (ps.length + 1));
+  var quantos = registrosAgora(t).length;
+
+  if (!confirm('Começar "' + nomeNovo + '" em ' + t.nome + '?\n\n' +
+               'As notas voltam do zero. Os ' + quantos +
+               (quantos === 1 ? ' registro fica guardado' : ' registros ficam guardados') +
+               ' em "' + nomeAntigo + '" e você continua vendo em Notas.\n\n' +
+               'Se ainda não baixou o backup, cancele e baixe primeiro.')) return;
+
+  p.nome = nomeAntigo;
+  p.fim = hoje();
+  ps.push({ id: novoId(), nome: nomeNovo, inicio: hoje(), fim: null });
+
+  dados.rodadas[t.id] = [];                                  // rodada do sorteio recomeça
+  dados.ausencias[t.id] = { data: hoje(), ids: [] };          // faltas do dia zeram
+  ultimaAcao = null;
+  ultimoLote = null;
+  sorteado = null;
+  variosIds = [];
+  variosRes = {};
+  periodoVisto = 'atual';
+  salvar();
+
+  fecharJanela($('#dlgPeriodo'));
+  repouso('Período novo', 'as notas voltaram do zero');
+  renderTurma();
+  irPara('notas');
+}
+
+function voltarPeriodo() {
+  var t = turmaAtual();
+  var ps = periodosDe(t);
+  if (ps.length < 2) return;
+
+  if (registrosAgora(t).length) {
+    alert('O período de agora já tem registros. Para não perder nada, ele não pode ser desfeito.');
+    return;
+  }
+
+  var atual = ps[ps.length - 1];
+  var anterior = ps[ps.length - 2];
+  if (!confirm('Voltar para "' + anterior.nome + '"?\n\n' +
+               'O período "' + atual.nome + '" some (ele está vazio) e as notas de "' +
+               anterior.nome + '" voltam a valer.')) return;
+
+  ps.pop();
+  anterior.fim = null;
+  periodoVisto = 'atual';
+  salvar();
+  renderTurma();
+  renderNotas();
+}
+
 /* ---------- tela de ajustes ---------- */
 
 function renderAjustes() {
@@ -1966,6 +2552,15 @@ function nomeArquivo(prefixo, ext) {
 function apelidoTurma(turma) {
   var s = normalizar(turma.nome).replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
   return s || 'turma';
+}
+
+// enquanto houver um período só, o nome do arquivo continua como sempre foi
+function apelidoPeriodo(turma) {
+  if (periodosDe(turma).length < 2) return '';
+  if (periodoVisto === 'todos') return '-tudo';
+  var p = periodoVendo(turma);
+  var s = normalizar(p.nome).replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+  return s ? '-' + s : '';
 }
 
 // a marca do começo faz o Excel abrir o arquivo com os acentos certos
@@ -2007,24 +2602,26 @@ function exportarNotas() {
       ]);
     });
 
-  baixar(nomeArquivo('notas-' + apelidoTurma(t), 'csv'), csv(linhas), 'text/csv;charset=utf-8');
+  baixar(nomeArquivo('notas-' + apelidoTurma(t) + apelidoPeriodo(t), 'csv'),
+         csv(linhas), 'text/csv;charset=utf-8');
 }
 
 function exportarRegistros() {
   var t = turmaAtual();
-  var linhas = [['Data', 'Hora', 'Aluno', 'Origem', 'Resultado', 'Marcou',
+  var linhas = [['Data', 'Hora', 'Periodo', 'Aluno', 'Origem', 'Resultado', 'Marcou',
                  'Resposta certa', 'Peso', 'Pontos']];
 
-  dados.registros
-    .filter(function (r) { return r.turmaId === t.id; })
+  registrosDa(t)
     .sort(function (a, b) { return String(a.data).localeCompare(String(b.data)); })
     .forEach(function (r) {
       var aluno = alunoPorId(t, r.alunoId);
+      var per = periodoPorId(t, r.per);
       var d = new Date(r.data);
       var m = multiploDe(r);
       linhas.push([
         isNaN(d) ? '' : d.toLocaleDateString('pt-BR'),
         isNaN(d) ? '' : d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
+        per ? per.nome : '',
         aluno ? aluno.nome : '(aluno removido)',
         r.atividade ? r.atividade
                     : (r.gabarito ? 'Pergunta para o grupo' : (r.ofereceu ? 'Se ofereceu' : 'Sorteio')),
@@ -2036,7 +2633,8 @@ function exportarRegistros() {
       ]);
     });
 
-  baixar(nomeArquivo('registros-' + apelidoTurma(t), 'csv'), csv(linhas), 'text/csv;charset=utf-8');
+  baixar(nomeArquivo('registros-' + apelidoTurma(t) + apelidoPeriodo(t), 'csv'),
+         csv(linhas), 'text/csv;charset=utf-8');
 }
 
 function importarBackup(arquivo) {
@@ -2077,9 +2675,13 @@ function carregarConserto() {
   if (typeof dados.zoom !== 'number' || isNaN(dados.zoom)) dados.zoom = 1;
   if (!dados.turmas.length) dados.turmas.push({ id: novoId(), nome: 'Turma 1', alunos: [] });
   if (!turmaAtual()) dados.turmaAtiva = dados.turmas[0].id;
+  dados.turmas.forEach(function (t) { garantirPeriodos(t); });
   ultimaAcao = null;
   ultimoLote = null;
   sorteado = null;
+  variosIds = [];
+  variosRes = {};
+  periodoVisto = 'atual';
   soltarSegurar();
 }
 
@@ -2162,6 +2764,70 @@ function ligarEventos() {
     });
   });
 
+  /* vários alunos de uma vez */
+
+  $('#btnVarios').addEventListener('click', abrirVarios);
+  $('#btnVariosCancelar').addEventListener('click', function () { fecharJanela($('#dlgVarios')); });
+  $('#btnVariosLancar').addEventListener('click', lancarVarios);
+  $('#btnRessortearVarios').addEventListener('click', ressortearVarios);
+
+  $$('#modoVarios .chip-peso').forEach(function (b) {
+    b.addEventListener('click', function () { trocarModoVarios(b.dataset.modo); });
+  });
+
+  $$('#qtdVarios .chip-peso').forEach(function (b) {
+    b.addEventListener('click', function () {
+      variosQtd = Number(b.dataset.qtd) || 3;
+      ressortearVarios();               // mudou o tamanho: sorteia de novo
+    });
+  });
+
+  $$('#pesoVarios .chip-peso').forEach(function (b) {
+    b.addEventListener('click', function () {
+      multVarios = Number(b.dataset.mult) || 1;
+      renderVarios();
+    });
+  });
+
+  $$('.todos-op[data-todos]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      variosIds.forEach(function (id) { variosRes[id] = b.dataset.todos; });
+      renderVarios();
+    });
+  });
+
+  $('#btnLimparVarios').addEventListener('click', function () {
+    variosRes = {};
+    renderVarios();
+  });
+
+  $('#buscaVarios').addEventListener('input', renderBuscaVarios);
+
+  // Enter junta o primeiro da busca, sem tirar a mão do teclado
+  $('#buscaVarios').addEventListener('keydown', function (e) {
+    if (e.key !== 'Enter') return;
+    e.preventDefault();
+    var primeiro = $('#listaBuscaVarios .linha-busca');
+    if (primeiro) primeiro.click();
+  });
+
+  /* períodos */
+
+  $('#btnNovoPeriodo').addEventListener('click', abrirPeriodo);
+  $('#btnVoltarPeriodo').addEventListener('click', voltarPeriodo);
+  $('#btnPeriodoCancelar').addEventListener('click', function () { fecharJanela($('#dlgPeriodo')); });
+  $('#btnPeriodoConfirmar').addEventListener('click', comecarPeriodo);
+  $('#btnBackupPeriodo').addEventListener('click', function () {
+    exportarBackup();
+    $('#avisoBackupPeriodo').textContent =
+      'Backup baixado. Confira na pasta de downloads antes de continuar.';
+  });
+
+  $('#periodoNotas').addEventListener('change', function (e) {
+    periodoVisto = e.target.value;
+    renderNotas();
+  });
+
   $('#btnVoluntarioCancelar').addEventListener('click', function () { fecharJanela($('#dlgVoluntario')); });
   $('#buscaVoluntario').addEventListener('input', renderBusca);
 
@@ -2239,6 +2905,9 @@ function ligarEventos() {
     ultimaAcao = null;
     ultimoLote = null;      // o desfazer da atividade era da turma anterior
     grupoIds = [];          // o grupo sorteado era da turma anterior
+    variosIds = [];
+    variosRes = {};
+    periodoVisto = 'atual'; // cada turma tem os períodos dela
     soltarSegurar();
     salvar();
     repouso('Pronto?', 'Toque no botão para sortear');
