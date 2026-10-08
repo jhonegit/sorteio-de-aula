@@ -92,6 +92,17 @@ mesmo.
 Limpar os dados do navegador apaga tudo. Baixar o backup de vez em quando
 resolve.
 
+## Página de questões
+
+Com o código de acesso salvo em Ajustes, o app manda uma cópia dos dados para
+o servidor do hub (`hub-escola.drakefrosst.workers.dev`, outro projeto, com
+banco D1 no Cloudflare) e, sempre que abre, busca o que foi marcado na página
+de questões e lança nas notas: participou e acertou vale "respondeu certo",
+participou e errou vale "errou", não quis, dormindo e fora da sala valem
+"se recusou", e faltou marca a falta do dia. Cada lançamento tem id fixo, então
+abrir o app duas vezes não duplica, e uma correção feita na página substitui o
+lançamento anterior. Sem o código, nada disso roda e o app segue só no aparelho.
+
 ## Instalar no celular
 
 Abrir o endereço no Chrome, tocar no menu de três pontinhos e escolher

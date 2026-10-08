@@ -128,6 +128,16 @@ button, input, select, textarea { font: inherit; color: inherit; }
   text-align: center;
 }
 
+.aviso-hub {
+  background: rgba(52, 211, 153, .14);
+  border-bottom-color: rgba(52, 211, 153, .3);
+  color: #6ee7b7;
+}
+
+.linha-codigo { display: flex; gap: .5rem; }
+.linha-codigo input { flex: 1; min-width: 0; letter-spacing: .04em; }
+.linha-codigo button { flex: none; }
+
 /* ---------- telas ---------- */
 
 main { padding: 1rem 1rem calc(env(safe-area-inset-bottom) + 5.6rem); max-width: 620px; margin: 0 auto; }

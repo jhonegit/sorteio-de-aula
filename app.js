@@ -4,7 +4,7 @@
 'use strict';
 
 var CHAVE = 'sorteio-alunos-v1';
-var VERSAO = 'v12';   // aparece em Ajustes; tem que bater com o CACHE do sw.js
+var VERSAO = 'v13';   // aparece em Ajustes; tem que bater com o CACHE do sw.js
 
 var PESOS_PADRAO = { certo: 1, errou: 0.7, naoSabe: 0.4, recusou: 0 };
 
@@ -268,6 +268,7 @@ function salvar() {
   if (!armazenamentoOk) return;
   try {
     localStorage.setItem(CHAVE, JSON.stringify(dados));
+    agendarEnvioHub();
   } catch (e) {
     armazenamentoOk = false;
     mostrarAviso('Não consegui salvar. A memória do navegador pode estar cheia. Baixe um backup em Ajustes antes de continuar.');
@@ -2525,6 +2526,8 @@ function renderAjustes() {
     $('#peso-' + k).value = num(dados.pesos[k]);
   });
   $('#ligaEfeitos').checked = dados.efeitos;
+  $('#campoCodigoHub').value = hub.codigo;
+  mostrarEstadoHub();
 }
 
 /* ---------- baixar arquivos ---------- */
@@ -3034,6 +3037,179 @@ function ligarEventos() {
   });
 }
 
+/* ---------- ligação com a página de questões ----------
+   Com o código de acesso, o app guarda uma cópia dos dados no servidor do hub
+   (é de lá que a página de questões tira a lista da turma) e, sempre que abre,
+   busca o que foi marcado na página e lança aqui. Sem código, nada disso roda. */
+
+// aberto pelo endereço de teste do computador, conversa com o servidor de teste
+var HUB = /^(localhost|127\.0\.0\.1)$/.test(location.hostname)
+  ? 'http://127.0.0.1:8787' : 'https://hub-escola.drakefrosst.workers.dev';
+var CHAVE_HUB = 'sorteio-hub-codigo';
+var hub = { codigo: lerCodigoHub(), timer: null, recebendo: false, ultimoEnvio: null, erro: null };
+
+function lerCodigoHub() {
+  try { return localStorage.getItem(CHAVE_HUB) || ''; } catch (e) { return ''; }
+}
+
+function hubPedir(metodo, caminho, corpo, codigo) {
+  return fetch(HUB + caminho, {
+    method: metodo,
+    headers: { 'Content-Type': 'application/json', 'X-Chave': codigo || hub.codigo },
+    body: corpo ? JSON.stringify(corpo) : undefined,
+    cache: 'no-store'
+  }).then(function (r) {
+    return r.json().catch(function () { return {}; }).then(function (j) {
+      if (r.status === 401) { var e = new Error('codigo'); e.codigo = true; throw e; }
+      if (!r.ok || !j.ok) throw new Error(j.motivo || 'erro');
+      return j;
+    });
+  });
+}
+
+// espera uns segundos depois da última mudança, para mandar uma vez só
+function agendarEnvioHub() {
+  if (!hub || !hub.codigo) return;
+  clearTimeout(hub.timer);
+  hub.timer = setTimeout(enviarEstadoHub, 4000);
+}
+
+function enviarEstadoHub() {
+  if (!hub.codigo) return;
+  clearTimeout(hub.timer);
+  var copia = dados;
+  // se um dia passar do limite do servidor, vai só a lista das turmas
+  if (JSON.stringify(dados).length > 1800000) {
+    copia = Object.assign({}, dados, { registros: [], registrosDeFora: true });
+  }
+  hubPedir('PUT', '/api/sorteio/estado', { dados: copia }).then(function () {
+    hub.ultimoEnvio = new Date();
+    hub.erro = null;
+    mostrarEstadoHub();
+  }).catch(function (e) {
+    hub.erro = e.codigo ? 'codigo' : 'rede';
+    mostrarEstadoHub();
+    if (!e.codigo) hub.timer = setTimeout(enviarEstadoHub, 60000);
+  });
+}
+
+function receberHub() {
+  if (!hub.codigo || hub.recebendo) return;
+  hub.recebendo = true;
+  hubPedir('GET', '/api/sorteio/lancamentos').then(function (r) {
+    var itens = r.itens || [];
+    if (!itens.length) return;
+    var n = aplicarLancamentos(itens);
+    salvar();
+    if (n.registros || n.faltas) avisarHub(n);
+    renderSortear();
+    if ($('#tela-notas').classList.contains('ativa')) renderNotas();
+    return hubPedir('POST', '/api/sorteio/lancamentos/aplicados', {
+      ids: itens.map(function (i) { return i.id; }), ate: r.hora
+    });
+  }).catch(function (e) {
+    if (e.codigo) { hub.erro = 'codigo'; mostrarEstadoHub(); }
+  }).then(function () { hub.recebendo = false; });
+}
+
+function diaDe(iso) {
+  var d = new Date(iso);
+  if (isNaN(d)) return '';
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+}
+
+/* Cada lançamento tem um id fixo. Se a página corrigir uma marcação, o mesmo id
+   chega de novo e substitui o anterior, então lançar duas vezes não duplica. */
+function aplicarLancamentos(itens) {
+  var n = { registros: 0, faltas: 0 };
+  itens.forEach(function (it) {
+    var t = null;
+    dados.turmas.forEach(function (x) { if (x.id === it.turmaId) t = x; });
+    if (!t || !it.alunoId || !alunoPorId(t, it.alunoId)) return;
+
+    dados.registros = dados.registros.filter(function (r) { return r.id !== it.id; });
+    var ehHoje = diaDe(it.data) === hoje();
+    var faltas = ausentes(t.id);
+
+    if (it.tipo === 'registro' && ROTULOS[it.resultado]) {
+      var reg = {
+        id: it.id,
+        turmaId: t.id,
+        per: periodoPorId(t, it.per) ? it.per : periodoAtual(t).id,
+        alunoId: it.alunoId,
+        resultado: it.resultado,
+        data: it.data || new Date().toISOString(),
+        origem: 'questoes'
+      };
+      if (it.situacao && it.situacao !== 'participou') reg.obs = it.situacao;
+      dados.registros.push(reg);
+      if (rodada(t.id).indexOf(it.alunoId) === -1) rodada(t.id).push(it.alunoId);
+      // estava na sala: se tinha falta marcada hoje, ela sai
+      var k = faltas.indexOf(it.alunoId);
+      if (ehHoje && k !== -1) faltas.splice(k, 1);
+      n.registros++;
+    } else if (it.tipo === 'falta') {
+      if (ehHoje && faltas.indexOf(it.alunoId) === -1) faltas.push(it.alunoId);
+      n.faltas++;
+    }
+  });
+  return n;
+}
+
+function avisarHub(n) {
+  var partes = [];
+  if (n.registros) partes.push(n.registros + (n.registros === 1 ? ' registro' : ' registros'));
+  if (n.faltas) partes.push(n.faltas + (n.faltas === 1 ? ' falta' : ' faltas'));
+  var el = $('#avisoHub');
+  el.textContent = 'Da página de questões: ' + partes.join(' e ') + ' lançados nas notas.';
+  el.classList.remove('oculto');
+  clearTimeout(avisarHub.timer);
+  avisarHub.timer = setTimeout(function () { el.classList.add('oculto'); }, 7000);
+}
+
+function mostrarEstadoHub() {
+  var el = $('#estadoHub');
+  if (!el) return;
+  if (!hub.codigo) el.textContent = 'Desligado.';
+  else if (hub.erro === 'codigo') el.textContent = 'O código não confere. Confira e salve de novo.';
+  else if (hub.erro === 'rede') el.textContent = 'Ligado, mas sem internet agora. Tudo continua guardado aqui e segue quando a conexão voltar.';
+  else if (hub.ultimoEnvio) el.textContent = 'Ligado. Turmas atualizadas às ' +
+    String(hub.ultimoEnvio.getHours()).padStart(2, '0') + ':' + String(hub.ultimoEnvio.getMinutes()).padStart(2, '0') + '.';
+  else el.textContent = 'Ligado.';
+}
+
+function salvarCodigoHub() {
+  var codigo = $('#campoCodigoHub').value.trim().toLowerCase();
+  var el = $('#estadoHub');
+  if (!codigo) {
+    try { localStorage.removeItem(CHAVE_HUB); } catch (e) {}
+    hub.codigo = ''; hub.erro = null; hub.ultimoEnvio = null;
+    mostrarEstadoHub();
+    return;
+  }
+  el.textContent = 'Conferindo…';
+  hubPedir('GET', '/api/ping', null, codigo).then(function () {
+    try { localStorage.setItem(CHAVE_HUB, codigo); } catch (e) {}
+    hub.codigo = codigo; hub.erro = null;
+    enviarEstadoHub();
+    receberHub();
+  }).catch(function (e) {
+    el.textContent = e.codigo ? 'O código não confere.' : 'Sem internet agora. Tente de novo com conexão.';
+  });
+}
+
+function ligarHub() {
+  $('#btnCodigoHub').addEventListener('click', salvarCodigoHub);
+  document.addEventListener('visibilitychange', function () {
+    if (document.visibilityState === 'visible') receberHub();
+  });
+  window.addEventListener('online', function () { receberHub(); agendarEnvioHub(); });
+  setInterval(function () {
+    if (document.visibilityState === 'visible') receberHub();
+  }, 60000);
+  if (hub.codigo) { receberHub(); enviarEstadoHub(); }
+}
+
 /* ---------- funcionar sem internet ---------- */
 
 function prepararOffline() {
@@ -3061,6 +3237,7 @@ if (!armazenamentoOk) {
 }
 
 ligarEventos();
+ligarHub();
 irPara('sortear');
 prepararOffline();
 

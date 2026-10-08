@@ -20,6 +20,7 @@
 <canvas id="festa" class="festa" aria-hidden="true"></canvas>
 
 <p id="avisoArmazenamento" class="aviso oculto"></p>
+<p id="avisoHub" class="aviso aviso-hub oculto"></p>
 
 <header class="topo">
   <span class="topo-marca" aria-hidden="true"></span>
@@ -180,6 +181,16 @@
         <div class="peso recusou"><span>Se recusou a responder</span><input type="text" id="peso-recusou" inputmode="decimal" autocomplete="off"></div>
       </div>
       <p class="ajuda">Mudar aqui recalcula as notas de tudo que já foi registrado, inclusive das aulas passadas. Estes mesmos valores servem para as atividades: quem fez ganha o de "respondeu certo", quem fez em parte o de "errou", quem não fez o de "se recusou".</p>
+    </div>
+
+    <div class="bloco">
+      <label>Página de questões</label>
+      <div class="linha-codigo">
+        <input type="text" id="campoCodigoHub" placeholder="Código de acesso" autocomplete="off" autocapitalize="off" spellcheck="false">
+        <button id="btnCodigoHub" type="button">Salvar</button>
+      </div>
+      <p class="ajuda" id="estadoHub"></p>
+      <p class="ajuda">Com o código, a página de questões enxerga as turmas daqui, e o que for marcado nela entra nas notas sempre que este app abrir. Apagar o código e salvar desliga.</p>
     </div>
 
     <div class="bloco">
