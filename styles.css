@@ -1565,6 +1565,12 @@ body.visto-aberto { overflow: hidden; }
 .cartao-visto .nota-atual-visto { color: #fcd34d; font-weight: 700; }
 .botoes-visto { display: grid; gap: .65rem; }
 .botoes-visto button { min-height: 4.2rem; font-size: 1.12rem; font-weight: 800; }
+.atividades-visto { display: grid; gap: .45rem; justify-items: center; color: var(--fraco); font-size: .9rem; font-weight: 700; }
+.quantidades-visto { display: flex; gap: .55rem; justify-content: center; width: 100%; }
+.quantidades-visto button { width: 3.25rem; height: 3.25rem; min-height: 3.25rem; padding: 0; border-radius: 50%; font-size: 1.15rem;
+  background: rgba(255, 255, 255, .06); color: var(--fraco); border: 2px solid var(--borda-forte); box-shadow: none; }
+/* o número escolhido fica aceso; os outros, discretos */
+.quantidades-visto button.ativo { color: #fff; background: linear-gradient(135deg, #7c5cff, #22d3ee); border-color: #fff; box-shadow: 0 0 0 3px rgba(124, 92, 255, .35); transform: scale(1.08); }
 .opcoes-turma-visto { display: grid; gap: .65rem; }
 .opcoes-turma-visto button { min-height: 4.2rem; font-size: 1.12rem; font-weight: 800; }
 .visto-escolha-turma { width: 100%; }

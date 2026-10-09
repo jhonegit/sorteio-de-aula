@@ -83,6 +83,10 @@ somente o id. Se a pessoa estiver em mais de uma turma e nenhuma delas for a
 turma ativa, escolha a turma no cartão. Essa escolha vale para a sessão do visto
 quando o mesmo QR aparecer de novo com a mesma combinação de turmas.
 
+Antes de marcar, escolha de 1 a 5 atividades; o contador soma os registros, e
+uma nova marcação para a mesma pessoa substitui o grupo anterior, que pode ser
+desfeito inteiro.
+
 ## Onde ficam os dados
 
 Tudo é guardado no próprio aparelho. Nenhum nome de aluno está no código e nada
