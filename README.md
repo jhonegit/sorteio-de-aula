@@ -70,6 +70,14 @@ Funciona no celular, instalado como aplicativo, e abre sem internet.
 - Confete no acerto, vibração e sequência de acertos da turma. Dá para desligar
   tudo isso em Ajustes se o dia pedir algo mais discreto.
 
+## Visto no caderno
+
+Toque em 📷, aponte a câmera para o QR do aluno e marque Completo (1,0) ou
+Metade (0,7). O visto é salvo na hora; ao encerrar, dá para lançar zero para
+quem ficou sem visto e não faltou. Cada adesivo deve abrir
+`https://jhonegit.github.io/sorteio-de-aula/#v=<id-do-aluno>`; também são
+aceitos `#v=<id>`, `v=<id>` ou somente o id.
+
 ## Onde ficam os dados
 
 Tudo é guardado no próprio aparelho. Nenhum nome de aluno está no código e nada

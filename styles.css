@@ -1455,6 +1455,170 @@ body.projetando .rodape { display: none; }
 
 .lista-grupo .vazio { padding: 1.4rem 1rem; }
 
+/* ---------- visto no caderno ---------- */
+
+.btn-visto {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: .45rem;
+  width: 100%;
+  padding: .75rem 1rem;
+  font-size: .92rem;
+  font-weight: 600;
+  color: #c4b5fd;
+  background: rgba(124, 92, 255, .09);
+  border-color: rgba(124, 92, 255, .38);
+}
+
+body.visto-aberto { overflow: hidden; }
+.tela-visto {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: flex;
+  flex-direction: column;
+  padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom);
+  background: #080910;
+}
+
+.visto-topo {
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+  padding: .65rem .75rem;
+  border-bottom: 1px solid var(--borda);
+}
+
+.visto-topo input {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: .55rem .65rem;
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.visto-contador { flex: 0 0 auto; color: var(--fraco); font-size: .8rem; font-variant-numeric: tabular-nums; }
+.visto-encerrar { flex: 0 0 auto; padding: .58rem .8rem; }
+
+.visto-camera {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  background: #05060a;
+}
+
+.visto-camera video {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.visto-moldura {
+  position: relative;
+  z-index: 1;
+  width: min(72vw, 42vh, 340px);
+  aspect-ratio: 1;
+  border: 2px solid rgba(255, 255, 255, .9);
+  border-radius: 22px;
+  box-shadow: 0 0 0 999px rgba(0, 0, 0, .28), 0 0 24px rgba(255, 255, 255, .25);
+  pointer-events: none;
+}
+
+.visto-aviso {
+  position: absolute;
+  z-index: 2;
+  left: 1rem;
+  right: 1rem;
+  top: 1rem;
+  margin: 0;
+  padding: .85rem 1rem;
+  border: 1px solid var(--borda-forte);
+  border-radius: 14px;
+  background: rgba(20, 22, 31, .96);
+  text-align: center;
+}
+
+.cartao-visto {
+  position: absolute;
+  z-index: 4;
+  left: 1rem;
+  right: 1rem;
+  top: 50%;
+  transform: translateY(-50%);
+  max-width: 520px;
+  margin: 0 auto;
+  padding: 1.2rem;
+  border: 1px solid var(--borda-forte);
+  border-radius: 22px;
+  background: rgba(20, 22, 31, .98);
+  box-shadow: var(--sombra);
+  text-align: center;
+}
+
+.cartao-visto h2 { font-size: clamp(1.35rem, 6vw, 2rem); overflow-wrap: anywhere; }
+.cartao-visto > p { margin: .4rem 0 1rem; color: var(--fraco); }
+.cartao-visto .nota-atual-visto { color: #fcd34d; font-weight: 700; }
+.botoes-visto { display: grid; gap: .65rem; }
+.botoes-visto button { min-height: 4.2rem; font-size: 1.12rem; font-weight: 800; }
+.visto-completo { color: #6ee7b7; background: rgba(52, 211, 153, .14); border-color: rgba(52, 211, 153, .5); }
+.visto-metade { color: #fcd34d; background: rgba(251, 191, 36, .13); border-color: rgba(251, 191, 36, .48); }
+.visto-cancelar { margin-top: .65rem; padding: .5rem 1rem; background: transparent; color: var(--fraco); }
+
+.mensagem-visto {
+  position: absolute;
+  z-index: 5;
+  left: 1rem;
+  right: 1rem;
+  bottom: 1rem;
+  padding: .9rem 1rem;
+  border: 1px solid var(--borda-forte);
+  border-radius: 14px;
+  background: rgba(20, 22, 31, .96);
+  text-align: center;
+  font-weight: 750;
+}
+
+.visto-rodape { display: flex; gap: .6rem; padding: .65rem .75rem; border-top: 1px solid var(--borda); }
+.visto-rodape button { flex: 1; min-height: 3rem; }
+.visto-rodape button:disabled { opacity: .45; }
+
+.resumo-visto {
+  position: absolute;
+  z-index: 8;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  background: rgba(5, 6, 10, .88);
+}
+
+.resumo-visto-cartao {
+  width: 100%;
+  max-width: 520px;
+  max-height: 90%;
+  overflow: auto;
+  padding: 1.1rem;
+  border: 1px solid var(--borda-forte);
+  border-radius: 20px;
+  background: var(--carta-solida);
+}
+
+.resumo-visto-cartao h2 { margin-bottom: .6rem; font-size: 1.3rem; }
+.linhas-resumo-visto { display: grid; gap: .45rem; margin-bottom: 1rem; }
+.linha-resumo-visto { padding: .65rem .75rem; border: 1px solid var(--borda); border-radius: 12px; color: #dbe1f8; }
+.botoes-resumo-visto { display: grid; gap: .55rem; }
+.botoes-resumo-visto button { min-height: 3.4rem; }
+.botoes-resumo-visto .menor { min-height: 2.6rem; }
+
+@media (min-width: 600px) {
+  .botoes-visto { grid-template-columns: 1fr 1fr; }
+}
+
 /* ---------- períodos ---------- */
 
 .faixa-periodo {

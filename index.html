@@ -65,6 +65,9 @@
       <button id="btnVarios" class="btn-varios secundario" type="button">
         <span aria-hidden="true">👥</span>Vários alunos de uma vez
       </button>
+      <button id="btnVisto" class="btn-visto secundario" type="button">
+        <span aria-hidden="true">📷</span>Visto no caderno
+      </button>
     </div>
 
     <div id="acoesResultado" class="acoes-resultado oculto">
@@ -221,6 +224,46 @@
   </section>
 
 </main>
+
+<!-- ============ VISTO NO CADERNO ============ -->
+<section id="telaVisto" class="tela-visto oculto" aria-label="Visto no caderno">
+  <header class="visto-topo">
+    <input id="nomeVisto" type="text" aria-label="Nome do visto" autocomplete="off" autocapitalize="sentences">
+    <span id="contadorVistos" class="visto-contador">0 vistos</span>
+    <button id="btnEncerrarVisto" class="visto-encerrar" type="button">Encerrar</button>
+  </header>
+  <div class="visto-camera">
+    <video id="videoVisto" autoplay playsinline muted></video>
+    <div class="visto-moldura" aria-hidden="true"></div>
+    <p id="avisoCameraVisto" class="visto-aviso oculto"></p>
+    <div id="cartaoVisto" class="cartao-visto oculto">
+      <h2 id="nomeAlunoVisto"></h2>
+      <p id="turmaAlunoVisto"></p>
+      <p id="notaAtualVisto" class="nota-atual-visto oculto"></p>
+      <div class="botoes-visto">
+        <button id="btnCompletoVisto" class="visto-completo" type="button">Completo · 1,0</button>
+        <button id="btnMetadeVisto" class="visto-metade" type="button">Metade · 0,7</button>
+      </div>
+      <button id="btnCancelarVisto" class="visto-cancelar" type="button">Cancelar</button>
+    </div>
+    <div id="mensagemVisto" class="mensagem-visto oculto" role="status"></div>
+  </div>
+  <footer class="visto-rodape">
+    <button id="btnDesfazerVisto" class="secundario" type="button" disabled>Desfazer último</button>
+    <button id="btnFecharVisto" class="secundario" type="button">Fechar</button>
+  </footer>
+  <div id="resumoVisto" class="resumo-visto oculto" role="dialog" aria-label="Resumo do visto">
+    <div class="resumo-visto-cartao">
+      <h2>Resumo do visto</h2>
+      <div id="linhasResumoVisto" class="linhas-resumo-visto"></div>
+      <div class="botoes-resumo-visto">
+        <button id="btnZerosVisto" type="button">Lançar zero para quem ficou sem visto</button>
+        <button id="btnFecharSemZerosVisto" class="secundario" type="button">Fechar sem lançar zero</button>
+        <button id="btnVoltarVisto" class="menor" type="button">Voltar para continuar lendo</button>
+      </div>
+    </div>
+  </div>
+</section>
 
 <!-- ============ PROJETOR ============ -->
 <div id="projetor" class="projetor oculto" role="dialog" aria-label="Notas para mostrar à turma">

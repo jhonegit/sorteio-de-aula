@@ -4,7 +4,7 @@
 'use strict';
 
 var CHAVE = 'sorteio-alunos-v1';
-var VERSAO = 'v13';   // aparece em Ajustes; tem que bater com o CACHE do sw.js
+var VERSAO = 'v14';   // aparece em Ajustes; tem que bater com o CACHE do sw.js
 
 var PESOS_PADRAO = { certo: 1, errou: 0.7, naoSabe: 0.4, recusou: 0 };
 
@@ -1826,6 +1826,361 @@ function renderDesfazerAtividade() {
     ultimoLote.quantos + (ultimoLote.quantos === 1 ? ' aluno' : ' alunos');
 }
 
+/* ---------- visto no caderno ---------- */
+
+var sessaoVisto = null;
+var fluxoVisto = { aberto: false, stream: null, detector: null, timer: null,
+                   ocupado: false, cartao: false, lotePorTurma: {}, idsPorAluno: {},
+                   desfazer: [], ultimoQr: '', horaQr: 0, entradaHistorico: false };
+
+function nomePadraoVisto() {
+  var d = new Date();
+  return 'Visto ' + String(d.getDate()).padStart(2, '0') + '/' +
+    String(d.getMonth() + 1).padStart(2, '0');
+}
+
+function chaveVisto(turmaId, alunoId) { return turmaId + '|' + alunoId; }
+
+function abrirVisto(alunoId) {
+  if (fluxoVisto.aberto) return;
+  fluxoVisto = { aberto: true, stream: null, detector: null, timer: null,
+                 ocupado: false, cartao: false, lotePorTurma: {}, idsPorAluno: {},
+                 desfazer: [], ultimoQr: '', horaQr: 0, entradaHistorico: true };
+  sessaoVisto = { id: novoId(), nome: nomePadraoVisto() };
+  $('#nomeVisto').value = sessaoVisto.nome;
+  $('#telaVisto').classList.remove('oculto');
+  document.body.classList.add('visto-aberto');
+  $('#cartaoVisto').classList.add('oculto');
+  $('#resumoVisto').classList.add('oculto');
+  $('#avisoCameraVisto').classList.add('oculto');
+  $('#mensagemVisto').classList.add('oculto');
+  $('.visto-moldura').classList.remove('oculto');
+  renderContadorVisto();
+  try { history.pushState({ visto: true }, '', location.href); } catch (e) {}
+  if (alunoId) mostrarAlunoPorQr(alunoId);
+  carregarLeitorVisto(function () {
+    if (!fluxoVisto.aberto) return;
+    abrirCameraVisto(alunoId);
+  });
+}
+
+function carregarLeitorVisto(pronto) {
+  if ('BarcodeDetector' in window) {
+    try {
+      fluxoVisto.detector = new BarcodeDetector({ formats: ['qr_code'] });
+    } catch (e) { fluxoVisto.detector = null; }
+  }
+  if (fluxoVisto.detector) { pronto(); return; }
+  if (window.jsQR) { pronto(); return; }
+  var script = document.createElement('script');
+  script.src = './vendor/jsQR.js';
+  script.onload = pronto;
+  script.onerror = function () { mostrarErroCameraVisto('Leitor de QR indisponível.'); };
+  document.head.appendChild(script);
+}
+
+function abrirCameraVisto(alunoId) {
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    mostrarErroCameraVisto('A câmera não abriu. Confira a permissão do navegador.');
+    return;
+  }
+  navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false })
+    .then(function (stream) {
+      if (!fluxoVisto.aberto) {
+        stream.getTracks().forEach(function (trilha) { trilha.stop(); });
+        return;
+      }
+      fluxoVisto.stream = stream;
+      var video = $('#videoVisto');
+      video.srcObject = stream;
+      return video.play().then(function () {
+        iniciarLeituraVisto();
+      });
+    }).catch(function () {
+      mostrarErroCameraVisto('A câmera não abriu. Confira a permissão do navegador.');
+    });
+}
+
+function mostrarErroCameraVisto(texto) {
+  if (!fluxoVisto.aberto) return;
+  if (fluxoVisto.stream) {
+    fluxoVisto.stream.getTracks().forEach(function (trilha) { trilha.stop(); });
+    fluxoVisto.stream = null;
+  }
+  $('#avisoCameraVisto').textContent = texto;
+  $('#avisoCameraVisto').classList.remove('oculto');
+  $('.visto-moldura').classList.add('oculto');
+}
+
+function idDoQr(valor) {
+  var texto = String(valor || '').trim();
+  var achado = /(?:^|[#&?])v=([^&]+)/.exec(texto);
+  if (!achado && /^v=/.test(texto)) achado = /^v=([^&]+)/.exec(texto);
+  if (!achado && /^https?:\/\//i.test(texto)) {
+    var hash = texto.split('#')[1] || '';
+    achado = /(?:^|&)v=([^&]+)/.exec(hash);
+  }
+  try { return decodeURIComponent(achado ? achado[1] : texto.replace(/^#/, '')); }
+  catch (e) { return achado ? achado[1] : texto; }
+}
+
+function acharAlunoEmTodas(id) {
+  for (var i = 0; i < dados.turmas.length; i++) {
+    var t = dados.turmas[i];
+    var a = alunoPorId(t, id);
+    if (a) return { turma: t, aluno: a };
+  }
+  return null;
+}
+
+function mostrarAlunoPorQr(id) {
+  if (!fluxoVisto.aberto) return;
+  var achado = acharAlunoEmTodas(idDoQr(id));
+  if (!achado) {
+    mostrarMensagemVisto('QR não reconhecido neste aparelho', 2000);
+    return;
+  }
+  fluxoVisto.cartao = true;
+  fluxoVisto.alunoAtual = achado;
+  $('#nomeAlunoVisto').textContent = achado.aluno.nome;
+  $('#turmaAlunoVisto').textContent = achado.turma.nome;
+  var chave = chaveVisto(achado.turma.id, achado.aluno.id);
+  var regId = fluxoVisto.idsPorAluno[chave];
+  var reg = regId ? dados.registros.filter(function (r) { return r.id === regId; })[0] : null;
+  var estado = $('#notaAtualVisto');
+  if (reg) {
+    estado.textContent = 'Já recebeu: ' + (reg.resultado === 'certo' ? 'Completo · 1,0' : 'Metade · 0,7') + '. Toque para trocar.';
+    estado.classList.remove('oculto');
+  } else estado.classList.add('oculto');
+  $('#cartaoVisto').classList.remove('oculto');
+}
+
+function iniciarLeituraVisto() {
+  clearTimeout(fluxoVisto.timer);
+  if (!fluxoVisto.aberto) return;
+  fluxoVisto.timer = setTimeout(lerQuadroVisto, 150);
+}
+
+function lerQuadroVisto() {
+  if (!fluxoVisto.aberto || fluxoVisto.cartao || !fluxoVisto.stream ||
+      !$('#resumoVisto').classList.contains('oculto')) return;
+  if (fluxoVisto.ocupado) { iniciarLeituraVisto(); return; }
+  var video = $('#videoVisto');
+  if (video.readyState < 2 || !video.videoWidth) { iniciarLeituraVisto(); return; }
+  fluxoVisto.ocupado = true;
+  if (fluxoVisto.detector) {
+    fluxoVisto.detector.detect(video).then(function (resultados) {
+      if (resultados && resultados.length) receberQrVisto(resultados[0].rawValue);
+    }).catch(function () {}).then(function () {
+      fluxoVisto.ocupado = false;
+      iniciarLeituraVisto();
+    });
+    return;
+  }
+  var canvas = lerQuadroVisto.canvas || (lerQuadroVisto.canvas = document.createElement('canvas'));
+  canvas.width = video.videoWidth;
+  canvas.height = video.videoHeight;
+  var contexto = canvas.getContext('2d', { willReadFrequently: true });
+  contexto.drawImage(video, 0, 0, canvas.width, canvas.height);
+  var imagem = contexto.getImageData(0, 0, canvas.width, canvas.height);
+  var resultado = window.jsQR ? window.jsQR(imagem.data, canvas.width, canvas.height, { inversionAttempts: 'dontInvert' }) : null;
+  if (resultado) receberQrVisto(resultado.data);
+  fluxoVisto.ocupado = false;
+  iniciarLeituraVisto();
+}
+
+function receberQrVisto(texto) {
+  var id = idDoQr(texto);
+  var agora = Date.now();
+  if (!id || (id === fluxoVisto.ultimoQr && agora - fluxoVisto.horaQr < 3000)) return;
+  fluxoVisto.ultimoQr = id;
+  fluxoVisto.horaQr = agora;
+  mostrarAlunoPorQr(id);
+}
+
+function renderContadorVisto() {
+  var total = Object.keys(fluxoVisto.idsPorAluno).length;
+  $('#contadorVistos').textContent = total + (total === 1 ? ' visto' : ' vistos');
+  $('#btnDesfazerVisto').disabled = !fluxoVisto.desfazer.length;
+}
+
+function nomeAtualVisto() {
+  return $('#nomeVisto').value.replace(/\s+/g, ' ').trim() || nomePadraoVisto();
+}
+
+function atualizarNomeDosVistos() {
+  if (!fluxoVisto.aberto) return;
+  sessaoVisto.nome = nomeAtualVisto();
+  Object.keys(fluxoVisto.lotePorTurma).forEach(function (turmaId) {
+    var lote = fluxoVisto.lotePorTurma[turmaId];
+    dados.registros.forEach(function (r) {
+      if (r.lote === lote && r.visto) r.atividade = sessaoVisto.nome;
+    });
+  });
+  salvar();
+}
+
+function gravarVisto(resultado) {
+  var achado = fluxoVisto.alunoAtual;
+  if (!achado) return;
+  atualizarNomeDosVistos();
+  var t = achado.turma, a = achado.aluno;
+  var chave = chaveVisto(t.id, a.id);
+  var anteriorId = fluxoVisto.idsPorAluno[chave];
+  var anterior = anteriorId ? dados.registros.filter(function (r) { return r.id === anteriorId; })[0] : null;
+  var faltas = ausentes(t.id);
+  var eraFalta = faltas.indexOf(a.id) !== -1;
+  var reg = {
+    id: anterior ? anterior.id : novoId(),
+    turmaId: t.id,
+    per: periodoAtual(t).id,
+    alunoId: a.id,
+    resultado: resultado,
+    data: new Date().toISOString(),
+    atividade: sessaoVisto.nome,
+    lote: fluxoVisto.lotePorTurma[t.id] || (fluxoVisto.lotePorTurma[t.id] = novoId()),
+    visto: true
+  };
+  fluxoVisto.desfazer.push({ chave: chave, regId: reg.id, anterior: anterior ? JSON.parse(JSON.stringify(anterior)) : null, eraFalta: eraFalta });
+  if (anterior) {
+    dados.registros = dados.registros.map(function (r) { return r.id === anterior.id ? reg : r; });
+  } else dados.registros.push(reg);
+  fluxoVisto.idsPorAluno[chave] = reg.id;
+  if (eraFalta) faltas.splice(faltas.indexOf(a.id), 1);
+  salvar();
+  renderContadorVisto();
+  fluxoVisto.cartao = false;
+  fluxoVisto.alunoAtual = null;
+  $('#cartaoVisto').classList.add('oculto');
+  mostrarMensagemVisto('✓ ' + a.nome + ' · ' + (resultado === 'certo' ? 'Completo' : 'Metade'), 1500);
+  vibrar(24);
+}
+
+function desfazerVisto() {
+  var acao = fluxoVisto.desfazer.pop();
+  if (!acao) return;
+  if (acao.anterior) {
+    if (acao.anterior.visto) acao.anterior.atividade = sessaoVisto.nome;
+    dados.registros = dados.registros.map(function (r) { return r.id === acao.regId ? acao.anterior : r; });
+    fluxoVisto.idsPorAluno[acao.chave] = acao.regId;
+  } else {
+    dados.registros = dados.registros.filter(function (r) { return r.id !== acao.regId; });
+    delete fluxoVisto.idsPorAluno[acao.chave];
+  }
+  if (acao.eraFalta) {
+    var partes = acao.chave.split('|');
+    var faltas = ausentes(partes[0]);
+    if (faltas.indexOf(partes[1]) === -1) faltas.push(partes[1]);
+  }
+  salvar();
+  renderContadorVisto();
+  renderNotas();
+}
+
+function mostrarMensagemVisto(texto, duracao) {
+  var el = $('#mensagemVisto');
+  el.textContent = texto;
+  el.classList.remove('oculto');
+  clearTimeout(mostrarMensagemVisto.timer);
+  mostrarMensagemVisto.timer = setTimeout(function () {
+    el.classList.add('oculto');
+    if (fluxoVisto.aberto && !fluxoVisto.cartao) iniciarLeituraVisto();
+  }, duracao);
+}
+
+function renderResumoVisto() {
+  atualizarNomeDosVistos();
+  clearTimeout(fluxoVisto.timer);
+  var caixa = $('#linhasResumoVisto');
+  caixa.textContent = '';
+  Object.keys(fluxoVisto.lotePorTurma).forEach(function (turmaId) {
+    var t = dados.turmas.filter(function (x) { return x.id === turmaId; })[0];
+    if (!t) return;
+    var vistos = t.alunos.filter(function (a) { return !!fluxoVisto.idsPorAluno[chaveVisto(t.id, a.id)]; }).length;
+    var faltaram = ausentes(t.id).filter(function (id) { return !!alunoPorId(t, id); }).length;
+    var sem = Math.max(0, t.alunos.length - vistos - faltaram);
+    caixa.appendChild(cria('div', 'linha-resumo-visto', t.nome + ': ' + vistos + ' com visto · ' + sem +
+      ' sem visto (' + faltaram + (faltaram === 1 ? ' faltou)' : ' faltaram)')));
+  });
+  $('#resumoVisto').classList.remove('oculto');
+}
+
+function encerrarVisto(comZeros) {
+  atualizarNomeDosVistos();
+  if (comZeros) {
+    var quando = new Date().toISOString();
+    Object.keys(fluxoVisto.lotePorTurma).forEach(function (turmaId) {
+      var t = dados.turmas.filter(function (x) { return x.id === turmaId; })[0];
+      if (!t) return;
+      var faltaram = ausentes(t.id);
+      t.alunos.forEach(function (a) {
+        if (fluxoVisto.idsPorAluno[chaveVisto(t.id, a.id)] || faltaram.indexOf(a.id) !== -1) return;
+        dados.registros.push({ id: novoId(), turmaId: t.id, per: periodoAtual(t).id,
+          alunoId: a.id, resultado: 'recusou', data: quando, atividade: sessaoVisto.nome,
+          lote: fluxoVisto.lotePorTurma[t.id], visto: true });
+      });
+    });
+    salvar();
+  }
+  fecharVisto(true);
+}
+
+function fecharVisto(voltarHistorico) {
+  if (!fluxoVisto.aberto) return;
+  fluxoVisto.aberto = false;
+  clearTimeout(fluxoVisto.timer);
+  clearTimeout(mostrarMensagemVisto.timer);
+  if (fluxoVisto.stream) fluxoVisto.stream.getTracks().forEach(function (trilha) { trilha.stop(); });
+  fluxoVisto.stream = null;
+  $('#videoVisto').srcObject = null;
+  $('#telaVisto').classList.add('oculto');
+  $('#resumoVisto').classList.add('oculto');
+  document.body.classList.remove('visto-aberto');
+  renderNotas();
+  renderSortear();
+  if (voltarHistorico && fluxoVisto.entradaHistorico) {
+    fluxoVisto.entradaHistorico = false;
+    try { history.back(); } catch (e) {}
+  }
+}
+
+function ligarEventosVisto() {
+  $('#btnVisto').addEventListener('click', function () { abrirVisto(null); });
+  $('#btnEncerrarVisto').addEventListener('click', renderResumoVisto);
+  $('#btnFecharVisto').addEventListener('click', function () { fecharVisto(true); });
+  $('#btnDesfazerVisto').addEventListener('click', desfazerVisto);
+  $('#btnCompletoVisto').addEventListener('click', function () { gravarVisto('certo'); });
+  $('#btnMetadeVisto').addEventListener('click', function () { gravarVisto('errou'); });
+  $('#btnCancelarVisto').addEventListener('click', function () {
+    fluxoVisto.cartao = false;
+    fluxoVisto.alunoAtual = null;
+    $('#cartaoVisto').classList.add('oculto');
+    iniciarLeituraVisto();
+  });
+  $('#nomeVisto').addEventListener('change', atualizarNomeDosVistos);
+  $('#nomeVisto').addEventListener('blur', atualizarNomeDosVistos);
+  $('#btnZerosVisto').addEventListener('click', function () { encerrarVisto(true); });
+  $('#btnFecharSemZerosVisto').addEventListener('click', function () { encerrarVisto(false); });
+  $('#btnVoltarVisto').addEventListener('click', function () {
+    $('#resumoVisto').classList.add('oculto');
+    iniciarLeituraVisto();
+  });
+  window.addEventListener('popstate', function () { if (fluxoVisto.aberto) fecharVisto(false); });
+  // link de QR aberto com o app já na tela (mesma aba)
+  window.addEventListener('hashchange', abrirVistoPeloEndereco);
+}
+
+function abrirVistoPeloEndereco() {
+  var id = null;
+  var hash = location.hash || '';
+  if (/^#?v=/.test(hash)) id = idDoQr(hash);
+  if (!id) return;
+  try { history.replaceState(history.state, '', location.pathname + location.search); } catch (e) {}
+  // com a tela do visto já aberta, só mostra o aluno novo
+  if (fluxoVisto.aberto) mostrarAlunoPorQr(id);
+  else abrirVisto(id);
+}
+
 /* ---------- pergunta para o grupo ---------- */
 
 /* Uma pergunta de A a E para vários alunos ao mesmo tempo. O app sorteia o
@@ -3035,6 +3390,8 @@ function ligarEventos() {
     repouso('Pronto?', 'Toque no botão para sortear');
     irPara('turma');
   });
+
+  ligarEventosVisto();
 }
 
 /* ---------- ligação com a página de questões ----------
@@ -3239,6 +3596,7 @@ if (!armazenamentoOk) {
 ligarEventos();
 ligarHub();
 irPara('sortear');
+abrirVistoPeloEndereco();
 prepararOffline();
 
 })();

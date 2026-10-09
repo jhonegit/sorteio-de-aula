@@ -1,13 +1,14 @@
 /* Guarda o app no aparelho para abrir sem internet.
    Ao mudar qualquer arquivo, troque o número do CACHE (v1 -> v2 -> v3...). */
 
-var CACHE = 'sorteio-v13';
+var CACHE = 'sorteio-v14';
 
 var ARQUIVOS = [
   './',
   './index.html',
   './styles.css',
   './app.js',
+  './vendor/jsQR.js',
   './manifest.webmanifest',
   './icons/icon-192.png',
   './icons/icon-512.png',
