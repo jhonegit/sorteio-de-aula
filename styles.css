@@ -1565,6 +1565,9 @@ body.visto-aberto { overflow: hidden; }
 .cartao-visto .nota-atual-visto { color: #fcd34d; font-weight: 700; }
 .botoes-visto { display: grid; gap: .65rem; }
 .botoes-visto button { min-height: 4.2rem; font-size: 1.12rem; font-weight: 800; }
+.opcoes-turma-visto { display: grid; gap: .65rem; }
+.opcoes-turma-visto button { min-height: 4.2rem; font-size: 1.12rem; font-weight: 800; }
+.visto-escolha-turma { width: 100%; }
 .visto-completo { color: #6ee7b7; background: rgba(52, 211, 153, .14); border-color: rgba(52, 211, 153, .5); }
 .visto-metade { color: #fcd34d; background: rgba(251, 191, 36, .13); border-color: rgba(251, 191, 36, .48); }
 .visto-cancelar { margin-top: .65rem; padding: .5rem 1rem; background: transparent; color: var(--fraco); }

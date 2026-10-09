@@ -72,11 +72,16 @@ Funciona no celular, instalado como aplicativo, e abre sem internet.
 
 ## Visto no caderno
 
-Toque em 📷, aponte a câmera para o QR do aluno e marque Completo (1,0) ou
+Toque em 📷, aponte a câmera para o QR da pessoa e marque Completo (1,0) ou
 Metade (0,7). O visto é salvo na hora; ao encerrar, dá para lançar zero para
-quem ficou sem visto e não faltou. Cada adesivo deve abrir
-`https://jhonegit.github.io/sorteio-de-aula/#v=<id-do-aluno>`; também são
-aceitos `#v=<id>`, `v=<id>` ou somente o id.
+quem ficou sem visto e não faltou. Os adesivos novos usam
+`https://jhonegit.github.io/sorteio-de-aula/#p=<pessoa>`. O código `pessoa` é
+um identificador compartilhado pela mesma pessoa nas turmas, com 10 letras ou
+números minúsculos; assim, o QR não depende do id local do aluno. O formato
+antigo `#v=<id-do-aluno>` continua aceito, assim como `#p=`, `p=`, `#v=`, `v=` e
+somente o id. Se a pessoa estiver em mais de uma turma e nenhuma delas for a
+turma ativa, escolha a turma no cartão. Essa escolha vale para a sessão do visto
+quando o mesmo QR aparecer de novo com a mesma combinação de turmas.
 
 ## Onde ficam os dados
 
@@ -110,6 +115,8 @@ participou e errou vale "errou", não quis, dormindo e fora da sala valem
 "se recusou", e faltou marca a falta do dia. Cada lançamento tem id fixo, então
 abrir o app duas vezes não duplica, e uma correção feita na página substitui o
 lançamento anterior. Sem o código, nada disso roda e o app segue só no aparelho.
+O hub também pode enviar turmas e alunos do iSEduc para acrescentar ou atualizar
+a lista local, mantendo os registros existentes.
 
 ## Instalar no celular
 

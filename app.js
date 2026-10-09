@@ -4,7 +4,7 @@
 'use strict';
 
 var CHAVE = 'sorteio-alunos-v1';
-var VERSAO = 'v14';   // aparece em Ajustes; tem que bater com o CACHE do sw.js
+var VERSAO = 'v15';   // aparece em Ajustes; tem que bater com o CACHE do sw.js
 
 var PESOS_PADRAO = { certo: 1, errou: 0.7, naoSabe: 0.4, recusou: 0 };
 
@@ -1831,6 +1831,7 @@ function renderDesfazerAtividade() {
 var sessaoVisto = null;
 var fluxoVisto = { aberto: false, stream: null, detector: null, timer: null,
                    ocupado: false, cartao: false, lotePorTurma: {}, idsPorAluno: {},
+                   escolhaTurmaPorQr: {}, combinacaoPendente: '', candidatosPendentes: [],
                    desfazer: [], ultimoQr: '', horaQr: 0, entradaHistorico: false };
 
 function nomePadraoVisto() {
@@ -1845,6 +1846,7 @@ function abrirVisto(alunoId) {
   if (fluxoVisto.aberto) return;
   fluxoVisto = { aberto: true, stream: null, detector: null, timer: null,
                  ocupado: false, cartao: false, lotePorTurma: {}, idsPorAluno: {},
+                 escolhaTurmaPorQr: {}, combinacaoPendente: '', candidatosPendentes: [],
                  desfazer: [], ultimoQr: '', horaQr: 0, entradaHistorico: true };
   sessaoVisto = { id: novoId(), nome: nomePadraoVisto() };
   $('#nomeVisto').value = sessaoVisto.nome;
@@ -1914,14 +1916,16 @@ function mostrarErroCameraVisto(texto) {
 
 function idDoQr(valor) {
   var texto = String(valor || '').trim();
-  var achado = /(?:^|[#&?])v=([^&]+)/.exec(texto);
-  if (!achado && /^v=/.test(texto)) achado = /^v=([^&]+)/.exec(texto);
+  var achado = /(?:^|[#&?])([pv])=([^&]+)/i.exec(texto);
+  if (!achado && /^[pv]=/i.test(texto)) achado = /^([pv])=([^&]+)/i.exec(texto);
   if (!achado && /^https?:\/\//i.test(texto)) {
     var hash = texto.split('#')[1] || '';
-    achado = /(?:^|&)v=([^&]+)/.exec(hash);
+    achado = /(?:^|&)([pv])=([^&]+)/i.exec(hash);
   }
-  try { return decodeURIComponent(achado ? achado[1] : texto.replace(/^#/, '')); }
-  catch (e) { return achado ? achado[1] : texto; }
+  var tipo = achado ? achado[1].toLowerCase() : 'v';
+  var valorQr = achado ? achado[2] : texto.replace(/^#/, '');
+  try { valorQr = decodeURIComponent(valorQr); } catch (e) {}
+  return { tipo: tipo, valor: valorQr };
 }
 
 function acharAlunoEmTodas(id) {
@@ -1933,17 +1937,24 @@ function acharAlunoEmTodas(id) {
   return null;
 }
 
-function mostrarAlunoPorQr(id) {
-  if (!fluxoVisto.aberto) return;
-  var achado = acharAlunoEmTodas(idDoQr(id));
-  if (!achado) {
-    mostrarMensagemVisto('QR não reconhecido neste aparelho', 2000);
-    return;
-  }
+function acharPessoaEmTodas(pessoa) {
+  var encontrados = [];
+  dados.turmas.forEach(function (t) {
+    t.alunos.forEach(function (a) {
+      if (a.pessoa === pessoa) encontrados.push({ turma: t, aluno: a });
+    });
+  });
+  return encontrados;
+}
+
+function mostrarCartaoParaAluno(achado) {
   fluxoVisto.cartao = true;
   fluxoVisto.alunoAtual = achado;
   $('#nomeAlunoVisto').textContent = achado.aluno.nome;
   $('#turmaAlunoVisto').textContent = achado.turma.nome;
+  $('#opcoesTurmaVisto').classList.add('oculto');
+  $('#opcoesTurmaVisto').textContent = '';
+  $('.botoes-visto').classList.remove('oculto');
   var chave = chaveVisto(achado.turma.id, achado.aluno.id);
   var regId = fluxoVisto.idsPorAluno[chave];
   var reg = regId ? dados.registros.filter(function (r) { return r.id === regId; })[0] : null;
@@ -1952,6 +1963,75 @@ function mostrarAlunoPorQr(id) {
     estado.textContent = 'Já recebeu: ' + (reg.resultado === 'certo' ? 'Completo · 1,0' : 'Metade · 0,7') + '. Toque para trocar.';
     estado.classList.remove('oculto');
   } else estado.classList.add('oculto');
+  $('#cartaoVisto').classList.remove('oculto');
+}
+
+function escolherTurmaDoQr(turmaId) {
+  var candidatos = fluxoVisto.candidatosPendentes || [];
+  for (var i = 0; i < candidatos.length; i++) {
+    if (candidatos[i].turma.id === turmaId) {
+      fluxoVisto.escolhaTurmaPorQr[fluxoVisto.combinacaoPendente] = turmaId;
+      fluxoVisto.candidatosPendentes = [];
+      fluxoVisto.combinacaoPendente = '';
+      mostrarCartaoParaAluno(candidatos[i]);
+      return;
+    }
+  }
+}
+
+function mostrarAlunoPorQr(valor) {
+  if (!fluxoVisto.aberto) return;
+  var qr = typeof valor === 'object' && valor.tipo ? valor : idDoQr(valor);
+  var encontrados = qr.tipo === 'p' ? acharPessoaEmTodas(qr.valor) : [];
+  if (qr.tipo === 'v') {
+    var achado = acharAlunoEmTodas(qr.valor);
+    if (achado) encontrados.push(achado);
+  }
+  if (!encontrados.length) {
+    mostrarMensagemVisto('QR não reconhecido neste aparelho', 2000);
+    return;
+  }
+  if (encontrados.length === 1) {
+    mostrarCartaoParaAluno(encontrados[0]);
+    return;
+  }
+  var ativa = turmaAtual();
+  if (ativa) {
+    for (var i = 0; i < encontrados.length; i++) {
+      if (encontrados[i].turma.id === ativa.id) {
+        mostrarCartaoParaAluno(encontrados[i]);
+        return;
+      }
+    }
+  }
+  var ids = encontrados.map(function (x) { return x.turma.id; }).sort();
+  var combinacao = ids.join('|');
+  var escolhida = fluxoVisto.escolhaTurmaPorQr[combinacao];
+  if (escolhida) {
+    for (var j = 0; j < encontrados.length; j++) {
+      if (encontrados[j].turma.id === escolhida) {
+        mostrarCartaoParaAluno(encontrados[j]);
+        return;
+      }
+    }
+  }
+  fluxoVisto.cartao = true;
+  fluxoVisto.alunoAtual = null;
+  fluxoVisto.combinacaoPendente = combinacao;
+  fluxoVisto.candidatosPendentes = encontrados;
+  $('#nomeAlunoVisto').textContent = encontrados[0].aluno.nome;
+  $('#turmaAlunoVisto').textContent = 'Escolha a turma';
+  $('#notaAtualVisto').classList.add('oculto');
+  $('.botoes-visto').classList.add('oculto');
+  var opcoes = $('#opcoesTurmaVisto');
+  opcoes.textContent = '';
+  encontrados.forEach(function (item) {
+    var botao = cria('button', 'visto-escolha-turma', item.turma.nome);
+    botao.type = 'button';
+    botao.setAttribute('data-turma-visto', item.turma.id);
+    opcoes.appendChild(botao);
+  });
+  opcoes.classList.remove('oculto');
   $('#cartaoVisto').classList.remove('oculto');
 }
 
@@ -1990,12 +2070,13 @@ function lerQuadroVisto() {
 }
 
 function receberQrVisto(texto) {
-  var id = idDoQr(texto);
+  var qr = idDoQr(texto);
+  var chaveQr = qr.tipo + ':' + qr.valor;
   var agora = Date.now();
-  if (!id || (id === fluxoVisto.ultimoQr && agora - fluxoVisto.horaQr < 3000)) return;
-  fluxoVisto.ultimoQr = id;
+  if (!qr.valor || (chaveQr === fluxoVisto.ultimoQr && agora - fluxoVisto.horaQr < 3000)) return;
+  fluxoVisto.ultimoQr = chaveQr;
   fluxoVisto.horaQr = agora;
-  mostrarAlunoPorQr(id);
+  mostrarAlunoPorQr(qr);
 }
 
 function renderContadorVisto() {
@@ -2151,10 +2232,18 @@ function ligarEventosVisto() {
   $('#btnDesfazerVisto').addEventListener('click', desfazerVisto);
   $('#btnCompletoVisto').addEventListener('click', function () { gravarVisto('certo'); });
   $('#btnMetadeVisto').addEventListener('click', function () { gravarVisto('errou'); });
+  $('#opcoesTurmaVisto').addEventListener('click', function (evento) {
+    var id = evento.target.getAttribute('data-turma-visto');
+    if (id) escolherTurmaDoQr(id);
+  });
   $('#btnCancelarVisto').addEventListener('click', function () {
     fluxoVisto.cartao = false;
     fluxoVisto.alunoAtual = null;
+    fluxoVisto.candidatosPendentes = [];
+    fluxoVisto.combinacaoPendente = '';
     $('#cartaoVisto').classList.add('oculto');
+    $('#opcoesTurmaVisto').classList.add('oculto');
+    $('.botoes-visto').classList.remove('oculto');
     iniciarLeituraVisto();
   });
   $('#nomeVisto').addEventListener('change', atualizarNomeDosVistos);
@@ -2173,8 +2262,8 @@ function ligarEventosVisto() {
 function abrirVistoPeloEndereco() {
   var id = null;
   var hash = location.hash || '';
-  if (/^#?v=/.test(hash)) id = idDoQr(hash);
-  if (!id) return;
+  if (/^#?[pv]=/i.test(hash)) id = idDoQr(hash);
+  if (!id || !id.valor) return;
   try { history.replaceState(history.state, '', location.pathname + location.search); } catch (e) {}
   // com a tela do visto já aberta, só mostra o aluno novo
   if (fluxoVisto.aberto) mostrarAlunoPorQr(id);
@@ -3450,22 +3539,41 @@ function enviarEstadoHub() {
   });
 }
 
+// dois canais: o das marcações da página de questões e o das turmas vindas do
+// iSEduc (separado para que uma versão velha do app não aceite turma sem saber criar)
+var CANAIS_HUB = ['sorteio', 'sorteio-turmas'];
+
+function receberCanal(canal) {
+  return hubPedir('GET', '/api/' + canal + '/lancamentos').then(function (r) {
+    var itens = r.itens || [];
+    if (!itens.length) return null;
+    var n = aplicarLancamentos(itens);
+    salvar();
+    return hubPedir('POST', '/api/' + canal + '/lancamentos/aplicados', {
+      ids: itens.map(function (i) { return i.id; }), ate: r.hora
+    }).then(function () { return n; }, function () { return n; });
+  });
+}
+
 function receberHub() {
   if (!hub.codigo || hub.recebendo) return;
   hub.recebendo = true;
-  hubPedir('GET', '/api/sorteio/lancamentos').then(function (r) {
-    var itens = r.itens || [];
-    if (!itens.length) return;
-    var n = aplicarLancamentos(itens);
-    salvar();
-    if (n.registros || n.faltas) avisarHub(n);
-    renderSortear();
-    if ($('#tela-notas').classList.contains('ativa')) renderNotas();
-    return hubPedir('POST', '/api/sorteio/lancamentos/aplicados', {
-      ids: itens.map(function (i) { return i.id; }), ate: r.hora
+  var total = { registros: 0, faltas: 0, turmas: 0, alunos: 0 };
+  var fila = Promise.resolve();
+  CANAIS_HUB.forEach(function (canal) {
+    fila = fila.then(function () { return receberCanal(canal); }).then(function (n) {
+      if (n) Object.keys(total).forEach(function (k) { total[k] += n[k] || 0; });
     });
+  });
+  fila.then(function () {
+    if (total.registros || total.faltas || total.turmas || total.alunos) {
+      avisarHub(total);
+      renderSortear();
+      if ($('#tela-notas').classList.contains('ativa')) renderNotas();
+      if ($('#tela-turma').classList.contains('ativa')) renderTurma();
+    }
   }).catch(function (e) {
-    if (e.codigo) { hub.erro = 'codigo'; mostrarEstadoHub(); }
+    if (e && e.codigo) { hub.erro = 'codigo'; mostrarEstadoHub(); }
   }).then(function () { hub.recebendo = false; });
 }
 
@@ -3478,8 +3586,36 @@ function diaDe(iso) {
 /* Cada lançamento tem um id fixo. Se a página corrigir uma marcação, o mesmo id
    chega de novo e substitui o anterior, então lançar duas vezes não duplica. */
 function aplicarLancamentos(itens) {
-  var n = { registros: 0, faltas: 0 };
+  var n = { registros: 0, faltas: 0, turmas: 0, alunos: 0 };
   itens.forEach(function (it) {
+    if (it.tipo === 'turma') {
+      var turma = null;
+      if (it.turmaId) dados.turmas.forEach(function (x) { if (x.id === it.turmaId) turma = x; });
+      // não procurar pelo número do iSEduc: duas disciplinas da mesma turma
+      // (Inglês e IA do 3º DS) são turmas diferentes aqui
+      if (!turma) dados.turmas.forEach(function (x) { if (x.nome === it.turmaNome) turma = x; });
+      if (!turma) {
+        turma = { id: novoId(), nome: it.turmaNome, alunos: [] };
+        dados.turmas.push(turma);
+        garantirPeriodos(turma);
+        n.turmas++;
+      }
+      turma.iseduc = it.iseduc;
+      if (!Array.isArray(turma.alunos)) turma.alunos = [];
+      (it.alunos || []).forEach(function (itemAluno) {
+        var existente = itemAluno.appId ? alunoPorId(turma, itemAluno.appId) : null;
+        if (existente) {
+          existente.pessoa = itemAluno.pessoa;
+          if (existente.nome !== itemAluno.nome) existente.nome = itemAluno.nome;
+        } else {
+          var pessoaExistente = turma.alunos.some(function (a) { return a.pessoa === itemAluno.pessoa; });
+          if (pessoaExistente) return;
+          turma.alunos.push({ id: novoId(), nome: itemAluno.nome, pessoa: itemAluno.pessoa });
+          n.alunos++;
+        }
+      });
+      return;
+    }
     var t = null;
     dados.turmas.forEach(function (x) { if (x.id === it.turmaId) t = x; });
     if (!t || !it.alunoId || !alunoPorId(t, it.alunoId)) return;
@@ -3517,8 +3653,13 @@ function avisarHub(n) {
   var partes = [];
   if (n.registros) partes.push(n.registros + (n.registros === 1 ? ' registro' : ' registros'));
   if (n.faltas) partes.push(n.faltas + (n.faltas === 1 ? ' falta' : ' faltas'));
+  var texto = partes.length ? 'Da página de questões: ' + partes.join(' e ') + ' lançados nas notas.' : '';
+  var estrutura = [];
+  if (n.turmas) estrutura.push(n.turmas + (n.turmas === 1 ? ' turma nova' : ' turmas novas'));
+  if (n.alunos) estrutura.push(n.alunos + (n.alunos === 1 ? ' aluno novo' : ' alunos novos'));
+  if (estrutura.length) texto += (texto ? ' ' : '') + 'Do hub: ' + estrutura.join(' e ') + '.';
   var el = $('#avisoHub');
-  el.textContent = 'Da página de questões: ' + partes.join(' e ') + ' lançados nas notas.';
+  el.textContent = texto;
   el.classList.remove('oculto');
   clearTimeout(avisarHub.timer);
   avisarHub.timer = setTimeout(function () { el.classList.add('oculto'); }, 7000);
