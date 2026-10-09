@@ -4,7 +4,7 @@
 'use strict';
 
 var CHAVE = 'sorteio-alunos-v1';
-var VERSAO = 'v15';   // aparece em Ajustes; tem que bater com o CACHE do sw.js
+var VERSAO = 'v16';   // aparece em Ajustes; tem que bater com o CACHE do sw.js
 
 var PESOS_PADRAO = { certo: 1, errou: 0.7, naoSabe: 0.4, recusou: 0 };
 
@@ -1829,6 +1829,7 @@ function renderDesfazerAtividade() {
 /* ---------- visto no caderno ---------- */
 
 var sessaoVisto = null;
+var atividadesVisto = 1;
 var fluxoVisto = { aberto: false, stream: null, detector: null, timer: null,
                    ocupado: false, cartao: false, lotePorTurma: {}, idsPorAluno: {},
                    escolhaTurmaPorQr: {}, combinacaoPendente: '', candidatosPendentes: [],
@@ -1848,6 +1849,8 @@ function abrirVisto(alunoId) {
                  ocupado: false, cartao: false, lotePorTurma: {}, idsPorAluno: {},
                  escolhaTurmaPorQr: {}, combinacaoPendente: '', candidatosPendentes: [],
                  desfazer: [], ultimoQr: '', horaQr: 0, entradaHistorico: true };
+  atividadesVisto = 1;
+  renderQuantidadesVisto();
   sessaoVisto = { id: novoId(), nome: nomePadraoVisto() };
   $('#nomeVisto').value = sessaoVisto.nome;
   $('#telaVisto').classList.remove('oculto');
@@ -1956,13 +1959,19 @@ function mostrarCartaoParaAluno(achado) {
   $('#opcoesTurmaVisto').textContent = '';
   $('.botoes-visto').classList.remove('oculto');
   var chave = chaveVisto(achado.turma.id, achado.aluno.id);
-  var regId = fluxoVisto.idsPorAluno[chave];
-  var reg = regId ? dados.registros.filter(function (r) { return r.id === regId; })[0] : null;
+  var regIds = fluxoVisto.idsPorAluno[chave] || [];
+  var registros = dados.registros.filter(function (r) { return regIds.indexOf(r.id) !== -1; });
+  var reg = registros[0] || null;
   var estado = $('#notaAtualVisto');
   if (reg) {
-    estado.textContent = 'Já recebeu: ' + (reg.resultado === 'certo' ? 'Completo · 1,0' : 'Metade · 0,7') + '. Toque para trocar.';
+    atividadesVisto = registros.length;
+    estado.textContent = 'Já recebeu: ' + registros.length + ' × ' + (reg.resultado === 'certo' ? 'Completo · 1,0' : 'Metade · 0,7') + '. Toque para trocar.';
     estado.classList.remove('oculto');
-  } else estado.classList.add('oculto');
+  } else {
+    atividadesVisto = 1;
+    estado.classList.add('oculto');
+  }
+  renderQuantidadesVisto();
   $('#cartaoVisto').classList.remove('oculto');
 }
 
@@ -2080,9 +2089,24 @@ function receberQrVisto(texto) {
 }
 
 function renderContadorVisto() {
-  var total = Object.keys(fluxoVisto.idsPorAluno).length;
+  var total = Object.keys(fluxoVisto.idsPorAluno).reduce(function (soma, chave) {
+    return soma + fluxoVisto.idsPorAluno[chave].length;
+  }, 0);
   $('#contadorVistos').textContent = total + (total === 1 ? ' visto' : ' vistos');
   $('#btnDesfazerVisto').disabled = !fluxoVisto.desfazer.length;
+}
+
+function renderQuantidadesVisto() {
+  var caixa = $('#quantidadesVisto');
+  if (!caixa) return;
+  caixa.textContent = '';
+  for (var i = 1; i <= 5; i++) {
+    var botao = cria('button', i === atividadesVisto ? 'ativo' : '', String(i));
+    botao.type = 'button';
+    botao.setAttribute('data-quantidade-visto', i);
+    botao.setAttribute('aria-pressed', i === atividadesVisto ? 'true' : 'false');
+    caixa.appendChild(botao);
+  }
 }
 
 function nomeAtualVisto() {
@@ -2107,47 +2131,39 @@ function gravarVisto(resultado) {
   atualizarNomeDosVistos();
   var t = achado.turma, a = achado.aluno;
   var chave = chaveVisto(t.id, a.id);
-  var anteriorId = fluxoVisto.idsPorAluno[chave];
-  var anterior = anteriorId ? dados.registros.filter(function (r) { return r.id === anteriorId; })[0] : null;
+  var idsAnteriores = fluxoVisto.idsPorAluno[chave] || [];
+  var anteriores = dados.registros.filter(function (r) { return idsAnteriores.indexOf(r.id) !== -1; })
+    .map(function (r) { return JSON.parse(JSON.stringify(r)); });
   var faltas = ausentes(t.id);
   var eraFalta = faltas.indexOf(a.id) !== -1;
-  var reg = {
-    id: anterior ? anterior.id : novoId(),
-    turmaId: t.id,
-    per: periodoAtual(t).id,
-    alunoId: a.id,
-    resultado: resultado,
-    data: new Date().toISOString(),
-    atividade: sessaoVisto.nome,
-    lote: fluxoVisto.lotePorTurma[t.id] || (fluxoVisto.lotePorTurma[t.id] = novoId()),
-    visto: true
-  };
-  fluxoVisto.desfazer.push({ chave: chave, regId: reg.id, anterior: anterior ? JSON.parse(JSON.stringify(anterior)) : null, eraFalta: eraFalta });
-  if (anterior) {
-    dados.registros = dados.registros.map(function (r) { return r.id === anterior.id ? reg : r; });
-  } else dados.registros.push(reg);
-  fluxoVisto.idsPorAluno[chave] = reg.id;
+  var lote = fluxoVisto.lotePorTurma[t.id] || (fluxoVisto.lotePorTurma[t.id] = novoId());
+  var novos = [];
+  for (var i = 0; i < atividadesVisto; i++) {
+    novos.push({
+      id: novoId(), turmaId: t.id, per: periodoAtual(t).id, alunoId: a.id,
+      resultado: resultado, data: new Date().toISOString(), atividade: sessaoVisto.nome,
+      lote: lote, visto: true
+    });
+  }
+  fluxoVisto.desfazer.push({ chave: chave, ids: novos.map(function (r) { return r.id; }), anteriores: anteriores, eraFalta: eraFalta });
+  dados.registros = dados.registros.filter(function (r) { return idsAnteriores.indexOf(r.id) === -1; }).concat(novos);
+  fluxoVisto.idsPorAluno[chave] = novos.map(function (r) { return r.id; });
   if (eraFalta) faltas.splice(faltas.indexOf(a.id), 1);
   salvar();
   renderContadorVisto();
   fluxoVisto.cartao = false;
   fluxoVisto.alunoAtual = null;
   $('#cartaoVisto').classList.add('oculto');
-  mostrarMensagemVisto('✓ ' + a.nome + ' · ' + (resultado === 'certo' ? 'Completo' : 'Metade'), 1500);
+  mostrarMensagemVisto('✓ ' + a.nome + ' · ' + (atividadesVisto > 1 ? atividadesVisto + ' × ' : '') + (resultado === 'certo' ? 'Completo' : 'Metade'), 1500);
   vibrar(24);
 }
 
 function desfazerVisto() {
   var acao = fluxoVisto.desfazer.pop();
   if (!acao) return;
-  if (acao.anterior) {
-    if (acao.anterior.visto) acao.anterior.atividade = sessaoVisto.nome;
-    dados.registros = dados.registros.map(function (r) { return r.id === acao.regId ? acao.anterior : r; });
-    fluxoVisto.idsPorAluno[acao.chave] = acao.regId;
-  } else {
-    dados.registros = dados.registros.filter(function (r) { return r.id !== acao.regId; });
-    delete fluxoVisto.idsPorAluno[acao.chave];
-  }
+  dados.registros = dados.registros.filter(function (r) { return acao.ids.indexOf(r.id) === -1; }).concat(acao.anteriores);
+  if (acao.anteriores.length) fluxoVisto.idsPorAluno[acao.chave] = acao.anteriores.map(function (r) { return r.id; });
+  else delete fluxoVisto.idsPorAluno[acao.chave];
   if (acao.eraFalta) {
     var partes = acao.chave.split('|');
     var faltas = ausentes(partes[0]);
@@ -2232,6 +2248,12 @@ function ligarEventosVisto() {
   $('#btnDesfazerVisto').addEventListener('click', desfazerVisto);
   $('#btnCompletoVisto').addEventListener('click', function () { gravarVisto('certo'); });
   $('#btnMetadeVisto').addEventListener('click', function () { gravarVisto('errou'); });
+  $('#quantidadesVisto').addEventListener('click', function (evento) {
+    var quantidade = Number(evento.target.getAttribute('data-quantidade-visto'));
+    if (quantidade < 1 || quantidade > 5) return;
+    atividadesVisto = quantidade;
+    renderQuantidadesVisto();
+  });
   $('#opcoesTurmaVisto').addEventListener('click', function (evento) {
     var id = evento.target.getAttribute('data-turma-visto');
     if (id) escolherTurmaDoQr(id);
